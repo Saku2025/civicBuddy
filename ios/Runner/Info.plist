@@ -21,7 +21,7 @@
 	<string>6.0</string>
 
 	<key>CFBundleName</key>
-	<string>my_app</string>
+	<string>CivicBuddy</string>
 
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
