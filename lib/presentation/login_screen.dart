@@ -69,12 +69,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       height: 88,
                       decoration: BoxDecoration(
                         color: colors.primaryContainer,
-                        borderRadius: BorderRadius.circular(26),
+                        shape: BoxShape.circle,
                       ),
-                      child: Icon(
-                        Icons.eco_outlined,
-                        size: 50,
-                        color: colors.onPrimaryContainer,
+                      padding: const EdgeInsets.all(8),
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/icon/app_icon.png',
+                          width: 88,
+                          height: 88,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                   ),
