@@ -53,4 +53,4 @@ app.*.map.json
 .env
 .env.*
 !.env.example
-/Users/shekhargayen/Flutter Project/my_app/garbage_detection_v1.6.2.apk
+garbage_detection_v1.6.2.apk
