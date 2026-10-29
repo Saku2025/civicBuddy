@@ -13,6 +13,18 @@ under Previous Surveys.
 2. `flutter pub get`
 3. `flutter run`
 
+## Releasing an update
+
+Bump `version:` in `pubspec.yaml` (e.g. `1.7.1+7` to `1.7.2+8`) and push to
+`main`. When the tests pass, GitHub Actions builds a signed APK and publishes
+release `v<version>` with `garbage_detection_v<version>.apk`; installed apps
+then show the "New Update Available" prompt on their next start. Pushes that
+do not change the version only run the tests.
+
+The release job needs these repository secrets (Settings > Secrets and
+variables > Actions): `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`,
+`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`.
+
 ## Backend (Supabase)
 
 - Auth: Google OAuth, redirect URL `io.supabase.flutter://login-callback/`

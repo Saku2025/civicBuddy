@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: subosito/flutter-action@v2
         with:
@@ -30,3 +30,104 @@ jobs:
 
       - name: Run tests
         run: flutter test
+
+  # Publishes a GitHub release (which the in-app updater picks up) whenever
+  # main has a pubspec.yaml version that has not been released yet.
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency: release
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Read version from pubspec.yaml
+        id: version
+        run: |
+          version=$(grep -m1 '^version:' pubspec.yaml | sed -E 's/^version: *([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          IFS=. read -r major minor patch <<< "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # Android versionCode derived from the version name, so it always
+          # increases when the version does: 1.7.2 -> 10702.
+          echo "build_number=$((major * 10000 + minor * 100 + patch))" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then
+            echo "v$version is already released. Bump the version in pubspec.yaml to publish an update."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-java@v4
+        if: steps.version.outputs.exists == 'false'
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: subosito/flutter-action@v2
+        if: steps.version.outputs.exists == 'false'
+        with:
+          channel: stable
+          cache: true
+
+      - name: Write .env and signing key from secrets
+        if: steps.version.outputs.exists == 'false'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          for name in SUPABASE_URL SUPABASE_PUBLISHABLE_KEY KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing repository secret $name (Settings > Secrets and variables > Actions)."
+              exit 1
+            fi
+          done
+          printf 'SUPABASE_URL=%s\nSUPABASE_PUBLISHABLE_KEY=%s\n' "$SUPABASE_URL" "$SUPABASE_PUBLISHABLE_KEY" > .env
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=%s\n' \
+            "$KEYSTORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" "$RUNNER_TEMP/release.jks" > android/key.properties
+
+      - name: Build APK
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          flutter build apk --release \
+            --target-platform android-arm,android-arm64 \
+            --build-number=${{ steps.version.outputs.build_number }}
+          cp build/app/outputs/flutter-apk/app-release.apk "garbage_detection_v${{ steps.version.outputs.version }}.apk"
+
+      # Installed apps only accept updates signed with the same key.
+      - name: Verify signing key
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          expected=73e86ffbf3fde0ba61c5b3efebdbe73c401323bf440e45e0c1808555896df344
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          actual=$("$apksigner" verify --print-certs "garbage_detection_v${{ steps.version.outputs.version }}.apk" | grep -m1 'SHA-256 digest' | awk '{print $NF}')
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::APK is signed with the wrong key ($actual). Installed apps would refuse this update."
+            exit 1
+          fi
+
+      - name: Publish GitHub release
+        if: steps.version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          previous=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          {
+            echo "## Changes"
+            git log --no-merges --pretty='- %s' ${previous:+$previous..}HEAD | head -n 30
+          } > release_notes.md
+          gh release create "v$VERSION" "garbage_detection_v$VERSION.apk" \
+            --target "$GITHUB_SHA" \
+            --title "CivicBuddy v$VERSION" \
+            --notes-file release_notes.md \
+            --latest
