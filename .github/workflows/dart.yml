@@ -97,8 +97,24 @@ jobs:
             echo "::error::KEYSTORE_BASE64 is not valid base64 (${#keystore} characters; the keystore gives 3492). Re-create it with: base64 -i ~/civicbuddy-release.jks | pbcopy"
             exit 1
           fi
+          # Trim stray spaces/line breaks from pasted values.
+          trim() { printf '%s' "$1" | tr -d '\r\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g'; }
+          store_password=$(trim "$KEYSTORE_PASSWORD")
+          key_password=$(trim "$KEY_PASSWORD")
+          key_alias=$(trim "$KEY_ALIAS")
+          # Fail fast, before the long Gradle build, if the alias or
+          # passwords do not unlock the key.
+          if ! keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$store_password" > /dev/null 2>&1; then
+            echo "::error::KEYSTORE_PASSWORD does not open the keystore."
+            exit 1
+          fi
+          if ! keytool -certreq -keystore "$RUNNER_TEMP/release.jks" -storepass "$store_password" \
+              -alias "$key_alias" -keypass "$key_password" > /dev/null 2>&1; then
+            echo "::error::KEY_ALIAS or KEY_PASSWORD is wrong. Aliases in the keystore: $(keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$store_password" 2>/dev/null | grep PrivateKeyEntry | cut -d, -f1)"
+            exit 1
+          fi
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=%s\n' \
-            "$KEYSTORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" "$RUNNER_TEMP/release.jks" > android/key.properties
+            "$store_password" "$key_password" "$key_alias" "$RUNNER_TEMP/release.jks" > android/key.properties
 
       - name: Build APK
         if: steps.version.outputs.exists == 'false'
