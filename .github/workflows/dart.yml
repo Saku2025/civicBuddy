@@ -62,7 +62,7 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         if: steps.version.outputs.exists == 'false'
         with:
           distribution: temurin
@@ -91,7 +91,12 @@ jobs:
             fi
           done
           printf 'SUPABASE_URL=%s\nSUPABASE_PUBLISHABLE_KEY=%s\n' "$SUPABASE_URL" "$SUPABASE_PUBLISHABLE_KEY" > .env
-          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          # Tolerate spaces/line breaks picked up when pasting the secret.
+          keystore=$(printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]')
+          if ! printf '%s' "$keystore" | base64 --decode > "$RUNNER_TEMP/release.jks" 2> /dev/null; then
+            echo "::error::KEYSTORE_BASE64 is not valid base64 (${#keystore} characters; the keystore gives 3492). Re-create it with: base64 -i ~/civicbuddy-release.jks | pbcopy"
+            exit 1
+          fi
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=%s\n' \
             "$KEYSTORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" "$RUNNER_TEMP/release.jks" > android/key.properties
 
