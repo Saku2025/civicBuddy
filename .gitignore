@@ -53,4 +53,6 @@ app.*.map.json
 .env
 .env.*
 !.env.example
-garbage_detection_v1.6.2.apk
+# Built release APKs
+*.apk
+/release/

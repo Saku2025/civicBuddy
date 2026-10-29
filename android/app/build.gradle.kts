@@ -25,8 +25,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.civicbuddy.app"
+        // Must stay com.example.my_app (and be signed with the same key as
+        // v1.6.2 and earlier) so installed apps can update in place.
+        applicationId = "com.example.my_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
