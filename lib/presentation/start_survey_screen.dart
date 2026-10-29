@@ -91,32 +91,41 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
 
   static const List<Map<String, dynamic>> _surveyorQuestions = [
     {
-      'question': ' Visual Cleanliness: Based on the captured photo, how would you rate the cleanliness of this specific spot? Are there visible garbage heaps or betel leaf (paan) stains?',
+      'question':
+          'Visual Cleanliness: Based on the captured photo, how would you rate the cleanliness of this specific spot? Are there visible garbage heaps or betel leaf (paan) stains? '
+          '(দৃশ্যমান পরিচ্ছন্নতা: তোলা ছবির ভিত্তিতে এই নির্দিষ্ট জায়গাটির পরিচ্ছন্নতা আপনি কেমন মূল্যায়ন করবেন? এখানে কি আবর্জনার স্তূপ বা পানের পিকের দাগ দেখা যাচ্ছে?)',
 
       'options': ['Very Clean', 'Mildly Dirty', 'Very Dirty'],
     },
 
     {
       'question':
-          ' Type of Waste: What is the primary type of garbage dumped here?',
+          'Type of Waste: What is the primary type of garbage dumped here? '
+          '(বর্জ্যের ধরন: এখানে প্রধানত কোন ধরনের আবর্জনা ফেলা হয়েছে?)',
 
       'options': ['Plastic waste', 'Organic/Food', 'Construction/Mixed'],
     },
 
     {
-      'question': ' Odor Intensity: How strong is the foul smell in this immediate area?',
+      'question':
+          'Odor Intensity: How strong is the foul smell in this immediate area? '
+          '(দুর্গন্ধের তীব্রতা: এই জায়গার আশেপাশে দুর্গন্ধ কতটা তীব্র?)',
 
       'options': ['Mild', 'Unbearable', 'No Smell'],
     },
 
     {
-      'question': ' Road Blockage: Is the dumped garbage spilling over onto the main road or walking path?',
+      'question':
+          'Road Blockage: Is the dumped garbage spilling over onto the main road or walking path? '
+          '(রাস্তা অবরোধ: ফেলে রাখা আবর্জনা কি মূল রাস্তা বা হাঁটার পথে ছড়িয়ে পড়ছে?)',
 
       'options': ['Yes', 'No'],
     },
 
     {
-      'question': ' Dustbin Status: Is there a designated public dustbin available, and what is its condition?',
+      'question':
+          'Dustbin Status: Is there a designated public dustbin available, and what is its condition? '
+          '(ডাস্টবিনের অবস্থা: এখানে কি নির্দিষ্ট সরকারি ডাস্টবিন আছে, এবং সেটির অবস্থা কেমন?)',
 
       'options': [
         'Not Available',
@@ -130,43 +139,57 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
 
   static const List<Map<String, dynamic>> _citizenQuestions = [
     {
-      'question': 'Timing Patterns: At what time of the day does this spot usually get the dirtiest, and when do the sweepers usually clean it?',
+      'question':
+          'Dirtiness Frequency: How often does this spot get noticeably dirty with garbage? '
+          '(নোংরা হওয়ার হার: এই জায়গাটি কত ঘন ঘন আবর্জনায় স্পষ্টভাবে নোংরা হয়ে যায়?)',
 
       'options': ['Daily', 'Several times a week', 'Weekly', 'Rarely'],
     },
 
     {
-      'question': 'Sweeper Regularity: Do the municipal sweepers come to collect the garbage regularly?',
+      'question':
+          'Sweeper Regularity: Do the municipal sweepers come to collect the garbage regularly? '
+          '(সাফাইকর্মীদের নিয়মিততা: পৌরসভার সাফাইকর্মীরা কি নিয়মিত আবর্জনা সংগ্রহ করতে আসেন?)',
 
       'options': ['Yes', 'No'],
     },
 
     {
-      'question': 'Source of Garbage: In your observation, where does most of this garbage come from?',
+      'question':
+          'Source of Garbage: In your observation, where does most of this garbage come from? '
+          '(আবর্জনার উৎস: আপনার পর্যবেক্ষণে, এই আবর্জনার বেশিরভাগ কোথা থেকে আসে?)',
 
       'options': ['Households', 'Local Market', 'Shops', 'Outsiders'],
     },
 
     {
-      'question': 'Complaint Resolution: If residents report an open garbage dump to the local authorities, do they take action to clear it?',
+      'question':
+          'Complaint Resolution: If residents report an open garbage dump to the local authorities, do they take action to clear it? '
+          '(অভিযোগের সমাধান: বাসিন্দারা খোলা আবর্জনার স্তূপের কথা স্থানীয় কর্তৃপক্ষকে জানালে, তারা কি তা পরিষ্কার করার ব্যবস্থা নেয়?)',
 
       'options': ['Always', 'Sometimes', 'Never', 'Unaware'],
     },
 
     {
-      'question': 'CCTV Intervention: Do you think installing CCTV cameras would stop people from littering in this spot?',
+      'question':
+          'CCTV Intervention: Do you think installing CCTV cameras would stop people from littering in this spot? '
+          '(সিসিটিভি নজরদারি: আপনার কি মনে হয় সিসিটিভি ক্যামেরা বসালে মানুষ এই জায়গায় আবর্জনা ফেলা বন্ধ করবে?)',
 
       'options': ['Yes', 'No'],
     },
 
     {
-      'question': 'Municipal Rating: How would you rate the local municipality`s overall efficiency in handling public hygiene?',
+      'question':
+          "Municipal Rating: How would you rate the local municipality's overall efficiency in handling public hygiene? "
+          '(পৌরসভার মূল্যায়ন: জনস্বাস্থ্য ও পরিচ্ছন্নতা রক্ষায় স্থানীয় পৌরসভার সামগ্রিক দক্ষতাকে আপনি কেমন মূল্যায়ন করবেন?)',
 
       'options': ['Good', 'Average', 'Poor'],
     },
 
     {
-      'question': 'Community Participation: Would you be willing to actively participate in a community cleanliness drive for your neighborhood?',
+      'question':
+          'Community Participation: Would you be willing to actively participate in a community cleanliness drive for your neighborhood? '
+          '(সামাজিক অংশগ্রহণ: আপনি কি আপনার এলাকার পরিচ্ছন্নতা অভিযানে সক্রিয়ভাবে অংশ নিতে ইচ্ছুক?)',
 
       'options': ['Yes', 'No'],
     },

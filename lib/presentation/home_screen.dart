@@ -197,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Garbage Detection',
+          'CivicBuddy',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [

@@ -84,7 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Garbage Detection',
+                    'CivicBuddy',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 28,

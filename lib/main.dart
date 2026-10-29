@@ -10,8 +10,6 @@ import 'services/theme_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Keep Firebase initialized because existing app features may still use it.
-
   await dotenv.load(fileName: '.env');
 
   await Supabase.initialize(
@@ -21,11 +19,11 @@ Future<void> main() async {
 
   await ThemeService.init();
 
-  runApp(const GarbageDetectionApp());
+  runApp(const CivicBuddyApp());
 }
 
-class GarbageDetectionApp extends StatelessWidget {
-  const GarbageDetectionApp({super.key});
+class CivicBuddyApp extends StatelessWidget {
+  const CivicBuddyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +32,7 @@ class GarbageDetectionApp extends StatelessWidget {
       builder: (context, themeMode, child) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'Garbage Detection',
+          title: 'CivicBuddy',
           themeMode: themeMode,
           theme: ThemeData(
             useMaterial3: true,
