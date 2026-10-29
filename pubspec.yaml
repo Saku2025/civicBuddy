@@ -4,7 +4,7 @@ description: "CivicBuddy - field surveys of garbage hotspots with GPS, photos an
 
 publish_to: 'none'
 
-version: 1.7.0+6
+version: 1.7.1+7
 
 environment:
   sdk: ^3.13.0
@@ -22,6 +22,12 @@ dependencies:
   shared_preferences: ^2.5.5
 
   supabase_flutter: ^2.17.2
+
+  # In-app updates from GitHub releases (Android).
+  http: ^1.5.0
+  package_info_plus: ^10.2.1
+  path_provider: ^2.1.6
+  open_filex: ^4.7.0
 
   flutter_native_splash: ^2.4.8
   flutter_dotenv: ^6.0.1
@@ -45,9 +51,9 @@ flutter:
 
   assets:
     - .env
+    # app_icon_android.png / app_icon_ios.png are only used by the launcher
+    # icon and splash generators, so they are not bundled into the app.
     - assets/icon/app_icon.png
-    - assets/icon/app_icon_ios.png
-    - assets/icon/app_icon_android.png
 
 flutter_native_splash:
   color: "#F5F8F5"

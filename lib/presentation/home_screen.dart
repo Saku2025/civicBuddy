@@ -5,6 +5,7 @@ import '../services/theme_service.dart';
 import 'login_screen.dart';
 import 'start_survey_screen.dart';
 import 'previous_surveys_screen.dart';
+import 'update_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +22,11 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadUserDetails();
+
+    // Check for a newer GitHub release after the home screen opens.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) checkForAppUpdate(context);
+    });
   }
 
   void _loadUserDetails() {
