@@ -90,7 +90,20 @@ jobs:
               exit 1
             fi
           done
-          printf 'SUPABASE_URL=%s\nSUPABASE_PUBLISHABLE_KEY=%s\n' "$SUPABASE_URL" "$SUPABASE_PUBLISHABLE_KEY" > .env
+          # Accept a pasted .env line ("NAME=value") as well as the bare value.
+          clean() { printf '%s' "$2" | tr -d '\r\n' | sed -E "s/^[[:space:]]*($1=)?//; s/[[:space:]]+\$//"; }
+          supabase_url=$(clean SUPABASE_URL "$SUPABASE_URL")
+          supabase_key=$(clean SUPABASE_PUBLISHABLE_KEY "$SUPABASE_PUBLISHABLE_KEY")
+          # A wrong value still builds, but sign-in fails in the app, so stop here.
+          if ! [[ "$supabase_url" =~ ^https://[a-z0-9]+\.supabase\.co/?$ ]]; then
+            echo "::error::SUPABASE_URL should look like https://<project>.supabase.co (got ${#supabase_url} characters)."
+            exit 1
+          fi
+          if ! [[ "$supabase_key" =~ ^(sb_publishable_|eyJ) ]]; then
+            echo "::error::SUPABASE_PUBLISHABLE_KEY should start with sb_publishable_ (got ${#supabase_key} characters)."
+            exit 1
+          fi
+          printf 'SUPABASE_URL=%s\nSUPABASE_PUBLISHABLE_KEY=%s\n' "$supabase_url" "$supabase_key" > .env
           # Tolerate spaces/line breaks picked up when pasting the secret.
           keystore=$(printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]')
           if ! printf '%s' "$keystore" | base64 --decode > "$RUNNER_TEMP/release.jks" 2> /dev/null; then

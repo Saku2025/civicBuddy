@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../services/theme_service.dart';
-import 'login_screen.dart';
 import 'start_survey_screen.dart';
 import 'previous_surveys_screen.dart';
-import 'update_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,11 +20,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadUserDetails();
-
-    // Check for a newer GitHub release after the home screen opens.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) checkForAppUpdate(context);
-    });
   }
 
   void _loadUserDetails() {
@@ -140,13 +133,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _logout() async {
     try {
+      // AuthGate swaps to LoginScreen on sign-out. Do not replace the route
+      // stack here: removing AuthGate would stop the next sign-in from ever
+      // reaching HomeScreen.
       await AuthService.signOut();
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)

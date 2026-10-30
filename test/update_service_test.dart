@@ -41,6 +41,31 @@ void main() {
     expect(info, isNull);
   });
 
+  test('reads the version from the release page redirect', () {
+    final info = UpdateService.parseReleaseRedirect(
+      'https://github.com/Saku2025/garbage-detection-App/releases/tag/v1.7.4',
+      '1.7.3',
+    );
+
+    expect(info!.updateAvailable, isTrue);
+    expect(info.latestVersion, '1.7.4');
+    expect(
+      info.downloadUrl,
+      'https://github.com/Saku2025/garbage-detection-App'
+      '/releases/download/v1.7.4/garbage_detection_v1.7.4.apk',
+    );
+  });
+
+  test('ignores redirects that are not a release tag', () {
+    expect(
+      UpdateService.parseReleaseRedirect(
+        'https://github.com/Saku2025/garbage-detection-App/releases',
+        '1.7.3',
+      ),
+      isNull,
+    );
+  });
+
   test('compares versions numerically', () {
     bool newer(String latest, String current) =>
         UpdateService.parseLatestRelease(

@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'presentation/home_screen.dart';
 import 'presentation/login_screen.dart';
+import 'presentation/update_dialog.dart';
 import 'services/theme_service.dart';
 
 Future<void> main() async {
@@ -93,8 +94,24 @@ class CivicBuddyApp extends StatelessWidget {
 }
 
 /// Responds to Supabase login/logout events, including Google OAuth callbacks.
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+
+    // Check for a newer release once per launch, signed in or not, so users
+    // who cannot sign in still get fixes.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) checkForAppUpdate(context);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -29,6 +29,12 @@ class UpdateService {
       'https://api.github.com/repos/'
       '$_repositoryOwner/$_repositoryName/releases/latest';
 
+  // Web page that redirects to /releases/tag/<tag>. Unlike the API it has no
+  // 60-requests-per-hour limit, which many phones behind one mobile-network
+  // IP can exhaust.
+  static const String _latestReleasePageUrl =
+      'https://github.com/$_repositoryOwner/$_repositoryName/releases/latest';
+
   static Future<UpdateInfo?> checkForUpdate() async {
     // Updates are installed from an APK, which only works on Android.
     if (!Platform.isAndroid) {
@@ -41,14 +47,25 @@ class UpdateService {
       // Version actually installed on the phone.
       final currentVersion = packageInfo.version.trim();
 
-      // Get latest GitHub release.
-      final response = await http.get(
-        Uri.parse(_latestReleaseUrl),
-        headers: const {
-          'Accept': 'application/vnd.github+json',
-          'Cache-Control': 'no-cache',
-        },
-      );
+      return await _checkViaApi(currentVersion) ??
+          await _checkViaReleasePage(currentVersion);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Preferred source: includes the release notes.
+  static Future<UpdateInfo?> _checkViaApi(String currentVersion) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse(_latestReleaseUrl),
+            headers: const {
+              'Accept': 'application/vnd.github+json',
+              'Cache-Control': 'no-cache',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
         return null;
@@ -60,6 +77,63 @@ class UpdateService {
     } catch (e) {
       return null;
     }
+  }
+
+  /// Fallback when the API is rate-limited or unavailable.
+  static Future<UpdateInfo?> _checkViaReleasePage(String currentVersion) async {
+    final client = http.Client();
+
+    try {
+      final request = http.Request('GET', Uri.parse(_latestReleasePageUrl))
+        ..followRedirects = false;
+
+      final response = await client
+          .send(request)
+          .timeout(const Duration(seconds: 15));
+
+      final location = response.headers['location'];
+
+      if (location == null) {
+        return null;
+      }
+
+      return parseReleaseRedirect(location, currentVersion);
+    } catch (e) {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Reads the tag from a ".../releases/tag/v1.2.3" redirect. CI attaches
+  /// `garbage_detection_v<version>.apk` to every release, so the download URL
+  /// can be built from the tag. Release notes are not available this way.
+  static UpdateInfo? parseReleaseRedirect(
+    String location,
+    String currentVersion,
+  ) {
+    final match = RegExp(r'/releases/tag/([^/?#]+)').firstMatch(location);
+
+    if (match == null) {
+      return null;
+    }
+
+    final tag = Uri.decodeComponent(match.group(1)!);
+    final latestVersion = _cleanVersion(tag);
+
+    if (!RegExp(r'^\d+\.\d+\.\d+$').hasMatch(latestVersion)) {
+      return null;
+    }
+
+    return UpdateInfo(
+      updateAvailable: _isNewerVersion(latestVersion, currentVersion),
+      currentVersion: currentVersion,
+      latestVersion: latestVersion,
+      downloadUrl:
+          'https://github.com/$_repositoryOwner/$_repositoryName'
+          '/releases/download/$tag/garbage_detection_v$latestVersion.apk',
+      releaseNotes: '',
+    );
   }
 
   /// Reads a GitHub "latest release" response. Returns null when the
