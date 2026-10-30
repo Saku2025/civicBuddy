@@ -1,0 +1,13 @@
+# Render Blueprint: hosts the CivicBuddy landing page (webpage/) as a static site.
+services:
+  - type: web
+    name: civicbuddy
+    runtime: static
+    # Plain HTML/CSS/JS, nothing to build.
+    buildCommand: echo "No build step"
+    staticPublishPath: ./webpage
+    # Only redeploy when the landing page changes, not on app commits.
+    buildFilter:
+      paths:
+        - webpage/**
+        - render.yaml
