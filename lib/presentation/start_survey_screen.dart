@@ -71,7 +71,8 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
 
   final List<_SurveyPoint> _points = [];
 
-  final Map<int, String> _citizenAnswers = {};
+  // Citizen interviews in the order they were taken.
+  final List<CitizenInterviewResult> _interviews = [];
 
   late final DateTime _startedAt = DateTime.now();
 
@@ -82,12 +83,6 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
   bool _isSavingSurvey = false;
 
   bool _surveyEnded = false;
-
-  String _citizenOccupation = '';
-
-  String _citizenGender = '';
-
-  int? _citizenAge;
 
   static const List<Map<String, dynamic>> _surveyorQuestions = [
     {
@@ -334,27 +329,33 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
     });
   }
 
-  Future<void> _showCitizenInterview() async {
+  /// Adds a new interview, or edits the one at [index].
+  Future<void> _showCitizenInterview({int? index}) async {
+    if (_surveyEnded) return;
+
+    final existing = index == null ? null : _interviews[index];
+    final number = (index ?? _interviews.length) + 1;
+
     final result = await Navigator.push<CitizenInterviewResult>(
       context,
 
       MaterialPageRoute(
         builder: (_) => _QuestionnaireScreen(
-          title: 'Citizen Interview',
+          title: 'Citizen Interview $number',
 
           subtitle: 'Citizen details and interview questions',
 
           questions: _citizenQuestions,
 
-          initialAnswers: _citizenAnswers,
+          initialAnswers: existing?.answers ?? const <int, String>{},
 
           showDemographics: true,
 
-          initialOccupation: _citizenOccupation,
+          initialOccupation: existing?.occupation ?? '',
 
-          initialGender: _citizenGender,
+          initialGender: existing?.gender ?? '',
 
-          initialAge: _citizenAge,
+          initialAge: existing?.age,
         ),
       ),
     );
@@ -362,16 +363,46 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
     if (!mounted || result == null) return;
 
     setState(() {
-      _citizenOccupation = result.occupation;
-
-      _citizenGender = result.gender;
-
-      _citizenAge = result.age;
-
-      _citizenAnswers
-        ..clear()
-        ..addAll(result.answers);
+      if (index == null) {
+        _interviews.add(result);
+      } else {
+        _interviews[index] = result;
+      }
     });
+  }
+
+  Future<void> _removeInterview(int index) async {
+    if (_surveyEnded) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+
+      builder: (ctx) => AlertDialog(
+        title: Text('Remove Interview ${index + 1}?'),
+
+        content: const Text(
+          'This removes the interview from the current survey session.',
+        ),
+
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+
+            child: const Text('Cancel'),
+          ),
+
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _interviews.removeAt(index));
   }
 
   Future<void> _endSurvey() async {
@@ -401,12 +432,12 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
       return;
     }
 
-    if (_citizenAnswers.length != _citizenQuestions.length) {
+    // Each saved interview is complete (the questionnaire enforces it); at
+    // least one is required.
+    if (_interviews.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Complete all citizen interview questions before ending.',
-          ),
+          content: Text('Add at least one citizen interview before ending.'),
         ),
       );
 
@@ -414,7 +445,7 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
 
       if (!mounted) return;
 
-      if (_citizenAnswers.length != _citizenQuestions.length) return;
+      if (_interviews.isEmpty) return;
     }
 
     final confirmed = await showDialog<bool>(
@@ -422,7 +453,8 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Submit survey?'),
         content: Text(
-          'Submit ${_points.length} point(s) and all questionnaire answers to Supabase?',
+          'Submit ${_points.length} point(s), ${_interviews.length} citizen '
+          'interview(s) and all questionnaire answers to Supabase?',
         ),
         actions: [
           TextButton(
@@ -473,21 +505,31 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
         });
       }
 
-      final citizenDocument = <String, dynamic>{
-        'occupation': _citizenOccupation,
-        'gender': _citizenGender,
-        'age': _citizenAge,
-        'answers': {
-          for (var i = 0; i < _citizenQuestions.length; i++)
-            _citizenQuestions[i]['question'] as String: _citizenAnswers[i],
-        },
-      };
+      final citizenDocuments = <Map<String, dynamic>>[
+        for (var n = 0; n < _interviews.length; n++)
+          {
+            'interview_number': n + 1,
+            'occupation': _interviews[n].occupation,
+            'gender': _interviews[n].gender,
+            'age': _interviews[n].age,
+            'answers': {
+              for (var i = 0; i < _citizenQuestions.length; i++)
+                _citizenQuestions[i]['question'] as String:
+                    _interviews[n].answers[i],
+            },
+          },
+      ];
 
       await SurveyService.saveSurvey(
         surveyId: _surveyId,
         startedAt: _startedAt,
         endedAt: DateTime.now(),
-        surveyData: {'points': pointDocuments, 'citizen': citizenDocument},
+        surveyData: {
+          'points': pointDocuments,
+          'citizens': citizenDocuments,
+          // Single-interview field read by app versions up to 1.7.4.
+          'citizen': citizenDocuments.first,
+        },
       );
 
       if (!mounted) return;
@@ -812,43 +854,124 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
 
-                  Card(
-                    elevation: 0,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Interviews (${_interviews.length})',
 
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                          style: const TextStyle(
+                            fontSize: 20,
 
-                      side: BorderSide(color: colors.outlineVariant),
-                    ),
-
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: colors.primaryContainer,
-
-                        child: Icon(
-                          Icons.record_voice_over_outlined,
-
-                          color: colors.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
 
-                      title: const Text(
-                        'Citizen Interview',
+                      if (!_surveyEnded)
+                        FilledButton.icon(
+                          onPressed: () => _showCitizenInterview(),
 
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                          icon: const Icon(Icons.person_add_alt_1_outlined),
 
-                      subtitle: Text(
-                        'Answers: ${_citizenAnswers.length}/${_citizenQuestions.length}',
-                      ),
-
-                      trailing: const Icon(Icons.chevron_right),
-
-                      onTap: _surveyEnded ? null : _showCitizenInterview,
-                    ),
+                          label: const Text('Add Interview'),
+                        ),
+                    ],
                   ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    'Interview as many citizens as you like. Each records occupation, gender, age and ${_citizenQuestions.length} answers.',
+
+                    style: TextStyle(color: colors.onSurfaceVariant),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  if (_interviews.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(24),
+
+                      decoration: BoxDecoration(
+                        border: Border.all(color: colors.outlineVariant),
+
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+
+                      child: const Column(
+                        children: [
+                          Icon(Icons.record_voice_over_outlined, size: 40),
+
+                          SizedBox(height: 8),
+
+                          Text(
+                            'No interviews yet',
+
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+
+                          Text(
+                            'Tap Add Interview to interview a citizen.',
+
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Newest interview first, like the survey points.
+                  for (var i = _interviews.length - 1; i >= 0; i--)
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+
+                      elevation: 0,
+
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+
+                        side: BorderSide(color: colors.outlineVariant),
+                      ),
+
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+
+                        leading: CircleAvatar(
+                          backgroundColor: colors.primaryContainer,
+
+                          child: Text('${i + 1}'),
+                        ),
+
+                        title: Text(
+                          'Interview ${i + 1}',
+
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+
+                        subtitle: Text(
+                          '${_interviews[i].occupation} · ${_interviews[i].gender} · Age\u00A0${_interviews[i].age}\n'
+                          'Answers: ${_interviews[i].answers.length}/${_citizenQuestions.length}',
+                        ),
+
+                        isThreeLine: true,
+
+                        trailing: _surveyEnded
+                            ? null
+                            : IconButton(
+                                tooltip: 'Remove interview',
+
+                                onPressed: () => _removeInterview(i),
+
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+
+                        onTap: _surveyEnded
+                            ? null
+                            : () => _showCitizenInterview(index: i),
+                      ),
+                    ),
 
                   const SizedBox(height: 10),
 

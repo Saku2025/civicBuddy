@@ -241,15 +241,19 @@ class SurveyDetailsScreen extends StatelessWidget {
               .toList()
         : <Map<String, dynamic>>[];
 
+    // Surveys from v1.7.5 store a "citizens" list; older ones a single
+    // "citizen" map.
+    final citizensRaw = _data['citizens'];
     final citizenRaw = _data['citizen'];
 
-    final citizen = citizenRaw is Map
-        ? Map<String, dynamic>.from(citizenRaw)
-        : <String, dynamic>{};
-
-    final citizenAnswers = citizen['answers'] is Map
-        ? Map<String, dynamic>.from(citizen['answers'] as Map)
-        : <String, dynamic>{};
+    final citizens = citizensRaw is List
+        ? citizensRaw
+              .whereType<Map>()
+              .map((c) => Map<String, dynamic>.from(c))
+              .toList()
+        : citizenRaw is Map
+        ? [Map<String, dynamic>.from(citizenRaw)]
+        : <Map<String, dynamic>>[];
 
     return Scaffold(
       appBar: AppBar(title: const Text('Survey Details')),
@@ -321,44 +325,73 @@ class SurveyDetailsScreen extends StatelessWidget {
           const SizedBox(height: 16),
 
           Text(
-            'Citizen interview',
+            'Citizen interviews (${citizens.length})',
 
             style: Theme.of(context).textTheme.titleLarge,
           ),
 
-          Card(
-            elevation: 0,
+          const SizedBox(height: 8),
 
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+          if (citizens.isEmpty) const Text('No citizen interview was saved.'),
 
-              side: BorderSide(color: colors.outlineVariant),
-            ),
-
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-
-                children: [
-                  _detail('Occupation', citizen['occupation']),
-
-                  _detail('Gender', citizen['gender']),
-
-                  _detail('Age', citizen['age']),
-
-                  const Divider(),
-
-                  if (citizenAnswers.isEmpty)
-                    const Text('No citizen answers saved.'),
-
-                  ...citizenAnswers.entries.map((e) => _answer(e.key, e.value)),
-                ],
-              ),
-            ),
-          ),
+          for (var i = 0; i < citizens.length; i++)
+            _citizenCard(context, i + 1, citizens[i]),
         ],
+      ),
+    );
+  }
+
+  Widget _citizenCard(
+    BuildContext context,
+    int number,
+    Map<String, dynamic> citizen,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+
+    final answers = citizen['answers'] is Map
+        ? Map<String, dynamic>.from(citizen['answers'] as Map)
+        : <String, dynamic>{};
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+
+      elevation: 0,
+
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+
+        side: BorderSide(color: colors.outlineVariant),
+      ),
+
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+
+          children: [
+            Text(
+              'Interview $number',
+
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 8),
+
+            _detail('Occupation', citizen['occupation']),
+
+            _detail('Gender', citizen['gender']),
+
+            _detail('Age', citizen['age']),
+
+            const Divider(),
+
+            if (answers.isEmpty) const Text('No citizen answers saved.'),
+
+            ...answers.entries.map((e) => _answer(e.key, e.value)),
+          ],
+        ),
       ),
     );
   }
