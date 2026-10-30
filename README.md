@@ -1,7 +1,7 @@
 # CivicBuddy
 
 A Flutter app for field surveys of garbage hotspots. Surveyors sign in with
-Google, record survey points (GPS location, timestamp and up to 5 photos per
+Google, record survey points (GPS location, timestamp and up to 10 photos per
 point), answer a surveyor questionnaire for each point, and run a citizen
 interview. Completed surveys are saved to Supabase and can be reviewed later
 under Previous Surveys.

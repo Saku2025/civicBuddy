@@ -69,6 +69,8 @@ class _SurveyPoint {
 class _StartSurveyScreenState extends State<StartSurveyScreen> {
   final LocationService _locationService = LocationService();
 
+  static const int _maxPhotosPerPoint = 10;
+
   final List<_SurveyPoint> _points = [];
 
   // Citizen interviews in the order they were taken.
@@ -244,9 +246,13 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
   Future<void> _addPhoto(_SurveyPoint point) async {
     if (_surveyEnded) return;
 
-    if (point.photos.length >= 5) {
+    if (point.photos.length >= _maxPhotosPerPoint) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Maximum 5 photos allowed per point.')),
+        const SnackBar(
+          content: Text(
+            'Maximum $_maxPhotosPerPoint photos allowed per point.',
+          ),
+        ),
       );
 
       return;
@@ -661,7 +667,7 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
                   const SizedBox(height: 6),
 
                   Text(
-                    'Each point records GPS, timestamp, up to 5 photos, and a 5-question surveyor questionnaire.',
+                    'Each point records GPS, timestamp, up to $_maxPhotosPerPoint photos, and a 5-question surveyor questionnaire.',
 
                     style: TextStyle(color: colors.onSurfaceVariant),
                   ),
@@ -766,13 +772,15 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    'Photos: ${point.photos.length}/5',
+                                    'Photos: ${point.photos.length}/$_maxPhotosPerPoint',
                                   ),
                                 ),
 
                                 if (!_surveyEnded)
                                   OutlinedButton.icon(
-                                    onPressed: point.photos.length == 5
+                                    onPressed:
+                                        point.photos.length >=
+                                            _maxPhotosPerPoint
                                         ? null
                                         : () => _addPhoto(point),
 
