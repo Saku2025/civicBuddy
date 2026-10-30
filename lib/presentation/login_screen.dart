@@ -18,20 +18,9 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final launched = await AuthService.signInWithGoogle();
-
-      if (!mounted) return;
-
-      if (!launched) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unable to open Google Sign-In. Please try again.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-      // AuthGate listens to Supabase auth changes and opens HomeScreen
-      // when Google authentication creates a valid session.
+      // Throws if sign-in could not even be started. AuthGate listens to
+      // Supabase auth changes and opens HomeScreen once a session exists.
+      await AuthService.signInWithGoogle();
     } catch (e) {
       if (!mounted) return;
 
