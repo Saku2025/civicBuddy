@@ -104,8 +104,15 @@ jobs:
           key_alias=$(trim "$KEY_ALIAS")
           # Fail fast, before the long Gradle build, if the alias or
           # passwords do not unlock the key.
-          if ! keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$store_password" > /dev/null 2>&1; then
-            echo "::error::KEYSTORE_PASSWORD does not open the keystore."
+          # SHA-256 of ~/civicbuddy-release.jks (the key v1.6.2+ are signed with).
+          expected_sha=7a9c52282adf918ea52752f49d0397c05c2c3b53f2e225b6873d0abdcbb661bd
+          actual_sha=$(sha256sum "$RUNNER_TEMP/release.jks" | cut -d' ' -f1)
+          if [ "$actual_sha" != "$expected_sha" ]; then
+            echo "::error::KEYSTORE_BASE64 decodes to a different file ($(stat -c %s "$RUNNER_TEMP/release.jks") bytes, expected 2618). Re-create it with: base64 -i ~/civicbuddy-release.jks | pbcopy"
+            exit 1
+          fi
+          if ! keytool_output=$(keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$store_password" 2>&1); then
+            echo "::error::KEYSTORE_PASSWORD does not open the keystore (password is ${#store_password} characters; keytool: $keytool_output)"
             exit 1
           fi
           if ! keytool -certreq -keystore "$RUNNER_TEMP/release.jks" -storepass "$store_password" \
