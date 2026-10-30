@@ -385,6 +385,15 @@ class SurveyDetailsScreen extends StatelessWidget {
 
             _detail('Age', citizen['age']),
 
+            // Saved from v1.7.8; older interviews have no location.
+            _detail(
+              'Location',
+              citizen['latitude'] == null
+                  ? null
+                  : '${citizen['area'] ?? 'Unknown Area'} '
+                        '(${citizen['latitude']}, ${citizen['longitude']})',
+            ),
+
             const Divider(),
 
             if (answers.isEmpty) const Text('No citizen answers saved.'),

@@ -27,6 +27,15 @@ class CitizenInterviewResult {
 
   final Map<int, String> answers;
 
+  // Where the interview took place.
+  final double latitude;
+
+  final double longitude;
+
+  final String area;
+
+  final DateTime locationCapturedAt;
+
   const CitizenInterviewResult({
     required this.occupation,
 
@@ -35,6 +44,14 @@ class CitizenInterviewResult {
     required this.age,
 
     required this.answers,
+
+    required this.latitude,
+
+    required this.longitude,
+
+    required this.area,
+
+    required this.locationCapturedAt,
   });
 }
 
@@ -362,6 +379,8 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
           initialGender: existing?.gender ?? '',
 
           initialAge: existing?.age,
+
+          initialInterview: existing,
         ),
       ),
     );
@@ -518,6 +537,12 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
             'occupation': _interviews[n].occupation,
             'gender': _interviews[n].gender,
             'age': _interviews[n].age,
+            'latitude': _interviews[n].latitude,
+            'longitude': _interviews[n].longitude,
+            'area': _interviews[n].area,
+            'location_captured_at': _interviews[n].locationCapturedAt
+                .toUtc()
+                .toIso8601String(),
             'answers': {
               for (var i = 0; i < _citizenQuestions.length; i++)
                 _citizenQuestions[i]['question'] as String:
@@ -960,6 +985,7 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
 
                         subtitle: Text(
                           '${_interviews[i].occupation} · ${_interviews[i].gender} · Age\u00A0${_interviews[i].age}\n'
+                          '${_interviews[i].area}\n'
                           'Answers: ${_interviews[i].answers.length}/${_citizenQuestions.length}',
                         ),
 
@@ -1045,6 +1071,8 @@ class _QuestionnaireScreen extends StatefulWidget {
     this.initialGender = '',
 
     this.initialAge,
+
+    this.initialInterview,
   });
 
   final String title;
@@ -1062,6 +1090,9 @@ class _QuestionnaireScreen extends StatefulWidget {
   final String initialGender;
 
   final int? initialAge;
+
+  /// The interview being edited, if any (keeps its original location).
+  final CitizenInterviewResult? initialInterview;
 
   @override
   State<_QuestionnaireScreen> createState() => _QuestionnaireScreenState();
@@ -1081,11 +1112,75 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
 
   String? _gender;
 
+  // Citizen interview location (demographics mode only).
+  final LocationService _locationService = LocationService();
+
+  double? _latitude;
+
+  double? _longitude;
+
+  String? _area;
+
+  DateTime? _locationCapturedAt;
+
+  bool _isLocating = false;
+
+  String? _locationError;
+
   @override
   void initState() {
     super.initState();
 
     _gender = widget.initialGender.isEmpty ? null : widget.initialGender;
+
+    final existing = widget.initialInterview;
+
+    if (existing != null) {
+      _latitude = existing.latitude;
+      _longitude = existing.longitude;
+      _area = existing.area;
+      _locationCapturedAt = existing.locationCapturedAt;
+    } else if (widget.showDemographics) {
+      // setState is not allowed during initState, so start after the first
+      // frame; show the spinner until then.
+      _isLocating = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _captureLocation();
+      });
+    }
+  }
+
+  Future<void> _captureLocation() async {
+    setState(() {
+      _isLocating = true;
+      _locationError = null;
+    });
+
+    try {
+      final position = await _locationService.getCurrentLocation();
+
+      final area = await _locationService.getAreaName(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _latitude = position.latitude;
+        _longitude = position.longitude;
+        _area = area;
+        _locationCapturedAt = DateTime.now();
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(
+        () => _locationError = e.toString().replaceFirst('Exception: ', ''),
+      );
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
   }
 
   @override
@@ -1119,6 +1214,20 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
         return;
       }
 
+      if (_latitude == null || _longitude == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _isLocating
+                  ? 'Getting the current location, please wait…'
+                  : 'Current location is required. Tap Try again.',
+            ),
+          ),
+        );
+
+        return;
+      }
+
       if (_answers.length != widget.questions.length) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1140,6 +1249,14 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
           age: age,
 
           answers: Map<int, String>.from(_answers),
+
+          latitude: _latitude!,
+
+          longitude: _longitude!,
+
+          area: _area ?? 'Unknown Area',
+
+          locationCapturedAt: _locationCapturedAt ?? DateTime.now(),
         ),
       );
 
@@ -1155,6 +1272,87 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
     }
 
     Navigator.pop(context, Map<int, String>.from(_answers));
+  }
+
+  /// Read-only "Location" box styled like the other fields, with a button to
+  /// capture the current position again.
+  Widget _locationField(ColorScheme colors) {
+    final Widget content;
+
+    if (_isLocating) {
+      content = const Row(
+        children: [
+          SizedBox(
+            width: 16,
+
+            height: 16,
+
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+
+          SizedBox(width: 10),
+
+          Text('Getting current location…'),
+        ],
+      );
+    } else if (_latitude != null && _longitude != null) {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+
+        children: [
+          Text(
+            _area ?? 'Unknown Area',
+
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+
+          Text(
+            '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}',
+
+            style: TextStyle(color: colors.onSurfaceVariant),
+          ),
+        ],
+      );
+    } else {
+      content = Text(
+        _locationError ?? 'Location not captured.',
+
+        style: TextStyle(color: colors.error),
+      );
+    }
+
+    final hasLocation = _latitude != null && !_isLocating;
+
+    return InputDecorator(
+      decoration: const InputDecoration(
+        labelText: 'Current location',
+
+        prefixIcon: Icon(Icons.location_on_outlined),
+
+        border: OutlineInputBorder(),
+      ),
+
+      child: Row(
+        children: [
+          Expanded(child: content),
+
+          if (!_isLocating)
+            hasLocation
+                ? IconButton(
+                    tooltip: 'Update location',
+
+                    onPressed: _captureLocation,
+
+                    icon: const Icon(Icons.my_location),
+                  )
+                : TextButton(
+                    onPressed: _captureLocation,
+
+                    child: const Text('Try again'),
+                  ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1262,6 +1460,10 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
                         border: OutlineInputBorder(),
                       ),
                     ),
+
+                    const SizedBox(height: 12),
+
+                    _locationField(colors),
 
                     const SizedBox(height: 24),
 
