@@ -90,7 +90,7 @@ const questions = [
   {
     en: 'Type of Waste: What is the primary type of garbage dumped here?',
     bn: 'বর্জ্যের ধরন: এখানে প্রধানত কোন ধরনের আবর্জনা ফেলা হয়েছে?',
-    options: ['Plastic waste', 'Organic/Food', 'Construction/Mixed'],
+    options: ['Plastic waste', 'Organic/Food', 'Clean'],
     picked: 1,
   },
   {

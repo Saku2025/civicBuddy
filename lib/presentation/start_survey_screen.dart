@@ -103,7 +103,7 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
           'Type of Waste: What is the primary type of garbage dumped here? '
           '(বর্জ্যের ধরন: এখানে প্রধানত কোন ধরনের আবর্জনা ফেলা হয়েছে?)',
 
-      'options': ['Plastic waste', 'Organic/Food', 'Construction/Mixed'],
+      'options': ['Plastic waste', 'Organic/Food', 'Clean'],
     },
 
     {
