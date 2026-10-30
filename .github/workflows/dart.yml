@@ -130,6 +130,9 @@ jobs:
             --target-platform android-arm,android-arm64 \
             --build-number=${{ steps.version.outputs.build_number }}
           cp build/app/outputs/flutter-apk/app-release.apk "garbage_detection_v${{ steps.version.outputs.version }}.apk"
+          # Same APK under a fixed name, so
+          # .../releases/latest/download/CivicBuddy.apk always downloads the newest version.
+          cp build/app/outputs/flutter-apk/app-release.apk CivicBuddy.apk
 
       # Installed apps only accept updates signed with the same key.
       - name: Verify signing key
@@ -154,7 +157,7 @@ jobs:
             echo "## Changes"
             git log --no-merges --pretty='- %s' ${previous:+$previous..}HEAD | head -n 30
           } > release_notes.md
-          gh release create "v$VERSION" "garbage_detection_v$VERSION.apk" \
+          gh release create "v$VERSION" "garbage_detection_v$VERSION.apk" CivicBuddy.apk \
             --target "$GITHUB_SHA" \
             --title "CivicBuddy v$VERSION" \
             --notes-file release_notes.md \

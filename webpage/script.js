@@ -2,9 +2,11 @@
 
 const RELEASES_API =
   'https://api.github.com/repos/Saku2025/garbage-detection-App/releases/latest';
-// Stable link for the QR code: always opens the newest release.
-const LATEST_RELEASE_PAGE =
-  'https://github.com/Saku2025/garbage-detection-App/releases/latest';
+// Permanent direct download of the newest APK (every release attaches a
+// CivicBuddy.apk). Used by the buttons and the QR code; needs no API call,
+// so it works even when GitHub's API rate limit is hit.
+const LATEST_APK_URL =
+  'https://github.com/Saku2025/garbage-detection-App/releases/latest/download/CivicBuddy.apk';
 
 const root = document.documentElement;
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -137,7 +139,7 @@ if (!reduceMotion) {
 }
 
 // ------------------------------------------------------------
-// Latest release: version, size and direct APK link
+// Latest release: version and size text (download links never depend on it)
 // ------------------------------------------------------------
 
 async function loadLatestRelease() {
@@ -160,15 +162,12 @@ async function loadLatestRelease() {
     }
 
     if (apk) {
-      document.querySelectorAll('[data-download]').forEach((link) => {
-        link.href = apk.browser_download_url;
-      });
       document.querySelectorAll('[data-size]').forEach((el) => {
         el.textContent = ` · ${(apk.size / 1e6).toFixed(1)} MB`;
       });
     }
   } catch {
-    // Offline or rate-limited: buttons keep linking to the releases page.
+    // Offline or rate-limited: the page just shows "Latest version".
   }
 }
 
@@ -184,14 +183,14 @@ function renderQr() {
   if (typeof window.qrcode !== 'function') {
     const fallback = document.createElement('a');
     fallback.className = 'qr-fallback';
-    fallback.href = LATEST_RELEASE_PAGE;
-    fallback.textContent = 'Open the download page';
+    fallback.href = LATEST_APK_URL;
+    fallback.textContent = 'Download the app';
     container.append(fallback);
     return;
   }
 
   const qr = window.qrcode(0, 'M');
-  qr.addData(LATEST_RELEASE_PAGE);
+  qr.addData(LATEST_APK_URL);
   qr.make();
 
   const count = qr.getModuleCount();
