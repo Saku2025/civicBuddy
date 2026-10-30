@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CivicBuddy</title>
+  <meta name="description" content="CivicBuddy is a field survey app for mapping garbage hotspots with GPS, photos and bilingual questionnaires.">
+  <meta name="theme-color" content="#256D3F">
+  <link rel="icon" href="assets/app-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Animated background -->
+  <div class="bg" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+    <span class="grid"></span>
+  </div>
+
+  <header class="nav">
+    <a class="brand" href="#top">
+      <img src="assets/app-icon.png" alt="" width="36" height="36">
+      <span>CivicBuddy</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#languages">Bengali</a>
+      <a href="#download" class="nav-cta">Download</a>
+    </nav>
+    <button class="theme-toggle" type="button" aria-label="Toggle dark mode">
+      <svg class="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg>
+    </button>
+  </header>
+
+  <main id="top">
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow reveal"><span class="dot"></span> Field survey app for cleaner cities</p>
+        <h1 class="reveal">Map every <span class="shine">garbage hotspot</span>. Help your city act faster.</h1>
+        <p class="lead reveal">CivicBuddy turns a walk through your neighbourhood into hard evidence: GPS-tagged survey points, photos, surveyor observations and citizen interviews, saved straight to the cloud.</p>
+        <div class="cta-row reveal">
+          <a class="btn btn-primary" data-download href="https://github.com/Saku2025/garbage-detection-App/releases/latest">
+            <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 19h16"/></svg>
+            Download for Android
+          </a>
+          <a class="btn btn-ghost" href="#how">See how it works</a>
+        </div>
+        <p class="meta reveal"><span data-version>Latest version</span> · Free · Android 7.0+</p>
+      </div>
+
+      <div class="hero-visual reveal">
+        <div class="phone">
+          <div class="phone-notch"></div>
+          <div class="screen">
+            <div class="app-bar">
+              <strong>Start Survey</strong>
+              <span class="avatar">S</span>
+            </div>
+            <div class="survey-card">
+              <small>Survey ID</small>
+              <b>SUR-1761811200000000</b>
+              <small>Started: 2026-10-30 09:41</small>
+            </div>
+            <div class="point-card">
+              <div class="point-head">
+                <span class="badge">1</span>
+                <b>Point 1</b>
+                <span class="pin-pulse"><i></i></span>
+              </div>
+              <p>Area: Salt Lake Sector V</p>
+              <p>Lat 22.576412 · Long 88.433518</p>
+              <div class="thumbs">
+                <span class="thumb t1"></span>
+                <span class="thumb t2"></span>
+                <span class="thumb t3"></span>
+                <span class="thumb add">+</span>
+              </div>
+              <div class="progress-row">
+                <span>Surveyor answers</span>
+                <b>5/5</b>
+              </div>
+              <div class="bar"><span></span></div>
+            </div>
+            <div class="submit-btn">Complete &amp; End Survey</div>
+          </div>
+        </div>
+        <div class="chip chip-gps">
+          <svg viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/></svg>
+          GPS locked
+        </div>
+        <div class="chip chip-photo">
+          <svg viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg>
+          3 photos
+        </div>
+        <div class="chip chip-cloud">
+          <svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .6-8A6 6 0 0 0 6 9.5 4.3 4.3 0 0 0 7 18Z"/><path d="m9.5 13.5 2 2 3.5-3.5"/></svg>
+          Saved to cloud
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section class="stats reveal">
+      <div><b data-count="5">5</b><span>photos per point</span></div>
+      <div><b data-count="12">12</b><span>survey questions</span></div>
+      <div><b data-count="2">2</b><span>languages: English &amp; Bengali</span></div>
+      <div><b data-count="6">6</b><span>decimal GPS precision</span></div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section id="how" class="section">
+      <p class="eyebrow reveal">How it works</p>
+      <h2 class="reveal">From street corner to survey report in four steps</h2>
+      <ol class="steps">
+        <li class="step reveal">
+          <span class="step-num">1</span>
+          <h3>Sign in with Google</h3>
+          <p>One tap and you're ready. Your surveys are linked to your account and private to you.</p>
+        </li>
+        <li class="step reveal">
+          <span class="step-num">2</span>
+          <h3>Add a survey point</h3>
+          <p>CivicBuddy records your GPS position, timestamp and area name automatically.</p>
+        </li>
+        <li class="step reveal">
+          <span class="step-num">3</span>
+          <h3>Capture &amp; observe</h3>
+          <p>Take up to 5 photos per point and answer the surveyor questionnaire on cleanliness, waste type, odour and more.</p>
+        </li>
+        <li class="step reveal">
+          <span class="step-num">4</span>
+          <h3>Interview &amp; submit</h3>
+          <p>Record a citizen interview, then submit the whole survey to the cloud and review it any time.</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- FEATURES -->
+    <section id="features" class="section">
+      <p class="eyebrow reveal">Features</p>
+      <h2 class="reveal">Everything a field surveyor needs</h2>
+      <div class="features">
+        <article class="feature reveal">
+          <span class="f-icon"><svg viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/></svg></span>
+          <h3>Automatic GPS points</h3>
+          <p>Every point stores latitude, longitude, time and the detected locality, with no typing.</p>
+        </article>
+        <article class="feature reveal">
+          <span class="f-icon"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg></span>
+          <h3>Photo evidence</h3>
+          <p>Capture up to five photos at each point with the built-in camera, stored securely online.</p>
+        </article>
+        <article class="feature reveal">
+          <span class="f-icon"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/></svg></span>
+          <h3>Surveyor questionnaire</h3>
+          <p>Five quick questions per point: cleanliness, waste type, odour, road blockage and dustbin status.</p>
+        </article>
+        <article class="feature reveal">
+          <span class="f-icon"><svg viewBox="0 0 24 24"><path d="M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8z"/><path d="M9 9h6M9 12h4"/></svg></span>
+          <h3>Citizen interviews</h3>
+          <p>Seven interview questions plus occupation, gender and age, capturing what residents see every day.</p>
+        </article>
+        <article class="feature reveal">
+          <span class="f-icon"><svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .6-8A6 6 0 0 0 6 9.5 4.3 4.3 0 0 0 7 18Z"/></svg></span>
+          <h3>Cloud history</h3>
+          <p>Submitted surveys sync to the cloud. Open Previous Surveys to review points, photos and answers.</p>
+        </article>
+        <article class="feature reveal">
+          <span class="f-icon"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/></svg></span>
+          <h3>Always up to date</h3>
+          <p>New versions show up inside the app. Tap Update Now and you're on the latest release.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- BENGALI -->
+    <section id="languages" class="section split">
+      <div class="split-copy">
+        <p class="eyebrow reveal">Built for Bengal</p>
+        <h2 class="reveal">Every question in English <span class="bn">ও বাংলা</span></h2>
+        <p class="lead reveal">Each surveyor and citizen question shows its Bengali translation, so interviews feel natural for everyone on the street.</p>
+      </div>
+      <div class="q-card reveal" aria-live="polite">
+        <div class="q-dots"><span class="active"></span><span></span><span></span></div>
+        <div class="q-body">
+          <p class="q-en">Type of Waste: What is the primary type of garbage dumped here?</p>
+          <p class="q-bn bn">বর্জ্যের ধরন: এখানে প্রধানত কোন ধরনের আবর্জনা ফেলা হয়েছে?</p>
+          <div class="q-options">
+            <span>Plastic waste</span><span class="picked">Organic/Food</span><span>Construction/Mixed</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRIVACY -->
+    <section class="section privacy reveal">
+      <span class="f-icon big"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5.5c0 4.4 3 8.2 7 9.5 4-1.3 7-5.1 7-9.5V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+      <div>
+        <h2>Your surveys stay yours</h2>
+        <p>Surveys and photos are stored securely and protected per account: only you can see the surveys you submit.</p>
+      </div>
+    </section>
+
+    <!-- DOWNLOAD -->
+    <section id="download" class="section download">
+      <div class="download-card reveal">
+        <div class="download-copy">
+          <p class="eyebrow">Get the app</p>
+          <h2>Download CivicBuddy for Android</h2>
+          <p class="lead">Scan the code with your phone camera, or tap the button on your phone.</p>
+          <a class="btn btn-primary btn-lg" data-download href="https://github.com/Saku2025/garbage-detection-App/releases/latest">
+            <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 19h16"/></svg>
+            Download APK
+          </a>
+          <p class="meta"><span data-version>Latest version</span><span data-size></span></p>
+          <ol class="install-steps">
+            <li>Open the downloaded file.</li>
+            <li>If asked, allow installs from your browser.</li>
+            <li>Tap <b>Install</b>, open CivicBuddy and sign in with Google.</li>
+          </ol>
+        </div>
+        <div class="qr-wrap">
+          <div class="qr" id="qr" role="img" aria-label="QR code linking to the CivicBuddy download page">
+            <span class="qr-scan"></span>
+          </div>
+          <p>Scan to download</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="brand">
+      <img src="assets/app-icon.png" alt="" width="28" height="28">
+      <span>CivicBuddy</span>
+    </div>
+    <p>Keep your surroundings clean and green.</p>
+    <a href="https://github.com/Saku2025/garbage-detection-App/releases">All releases</a>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
