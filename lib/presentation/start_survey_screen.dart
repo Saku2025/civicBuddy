@@ -657,7 +657,8 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
                       ),
                     ),
 
-                  ..._points.map(
+                  // Newest point first, so a just-added point appears at the top.
+                  ..._points.reversed.map(
                     (point) => Card(
                       margin: const EdgeInsets.only(bottom: 12),
 
