@@ -18,6 +18,13 @@ class _CameraScreenState extends State<CameraScreen> {
 
   XFile? capturedImage;
 
+  // Zoom range reported by the camera, and the current level.
+  double _minZoom = 1;
+  double _maxZoom = 1;
+  double _zoom = 1;
+  double _zoomAtPinchStart = 1;
+  bool _isPinching = false;
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +61,8 @@ class _CameraScreenState extends State<CameraScreen> {
         controller = newController;
         isInitializing = false;
       });
+
+      _loadZoomRange(newController);
     } catch (e) {
       if (!mounted) return;
 
@@ -98,6 +107,74 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
+  // ------------------------------------------------------------
+  // Zoom
+  // ------------------------------------------------------------
+
+  /// Right after initialize() the Android (CameraX) plugin still reports a
+  /// placeholder 1x-1x range until the camera is running, so poll briefly
+  /// for the real one. Cameras that truly cannot zoom stay 1x-only.
+  Future<void> _loadZoomRange(CameraController camera) async {
+    for (var attempt = 0; attempt < 10; attempt++) {
+      try {
+        final minZoom = await camera.getMinZoomLevel();
+        final maxZoom = await camera.getMaxZoomLevel();
+
+        if (!mounted || controller != camera) return;
+
+        if (maxZoom > 1 || minZoom < 1) {
+          setState(() {
+            _minZoom = minZoom;
+            _maxZoom = maxZoom;
+            _zoom = 1.clamp(minZoom, maxZoom).toDouble();
+          });
+          return;
+        }
+      } catch (_) {
+        // Zoom state not available yet; try again.
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      if (!mounted || controller != camera) return;
+    }
+  }
+
+  Future<void> _setZoom(double zoom) async {
+    final camera = controller;
+    if (camera == null || !camera.value.isInitialized) return;
+
+    final clamped = zoom.clamp(_minZoom, _maxZoom).toDouble();
+    if ((clamped - _zoom).abs() < 0.01) return;
+
+    setState(() => _zoom = clamped);
+
+    try {
+      await camera.setZoomLevel(clamped);
+    } catch (_) {
+      // Ignore: the next pinch or button tap tries again.
+    }
+  }
+
+  /// Zoom buttons like the phone camera: 0.5x only with an ultra-wide lens,
+  /// 2x and 5x only when the camera can zoom that far.
+  List<double> get _zoomPresets => [
+    if (_minZoom < 1) _minZoom,
+    1,
+    if (_maxZoom >= 2) 2,
+    if (_maxZoom >= 5) 5,
+  ];
+
+  /// The button that "owns" the current zoom: the largest preset at or below it.
+  double get _activePreset =>
+      _zoomPresets.lastWhere((p) => p <= _zoom + 0.05, orElse: () => _minZoom);
+
+  String _zoomLabel(double zoom) {
+    final rounded = zoom.roundToDouble();
+    return (zoom - rounded).abs() < 0.05
+        ? '${rounded.toInt()}x'
+        : '${zoom.toStringAsFixed(1)}x';
+  }
+
   void retakeImage() {
     setState(() {
       capturedImage = null;
@@ -135,7 +212,20 @@ class _CameraScreenState extends State<CameraScreen> {
                   child: CircularProgressIndicator(color: Colors.white),
                 )
               : controller != null && controller!.value.isInitialized
-              ? Center(child: CameraPreview(controller!))
+              ? GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onScaleStart: (_) => _zoomAtPinchStart = _zoom,
+                  onScaleUpdate: (details) {
+                    // Two fingers only, so a single tap or drag never zooms.
+                    if (details.pointerCount < 2) return;
+                    if (!_isPinching) setState(() => _isPinching = true);
+                    _setZoom(_zoomAtPinchStart * details.scale);
+                  },
+                  onScaleEnd: (_) {
+                    if (_isPinching) setState(() => _isPinching = false);
+                  },
+                  child: Center(child: CameraPreview(controller!)),
+                )
               : const Center(
                   child: Text(
                     'Camera unavailable',
@@ -201,18 +291,104 @@ class _CameraScreenState extends State<CameraScreen> {
           ),
         ),
 
-        const Positioned(
-          bottom: 125,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: Text(
-              'Tap to capture',
-              style: TextStyle(color: Colors.white, fontSize: 14),
+        // Current zoom, shown large while pinching.
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Center(
+              child: AnimatedOpacity(
+                opacity: _isPinching ? 1 : 0,
+                duration: const Duration(milliseconds: 150),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Text(
+                    _zoomLabel(_zoom),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
+
+        if (controller != null &&
+            controller!.value.isInitialized &&
+            _zoomPresets.length > 1)
+          Positioned(
+            bottom: 128,
+            left: 0,
+            right: 0,
+            child: Center(child: _zoomControls()),
+          )
+        else
+          const Positioned(
+            bottom: 125,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Text(
+                'Tap to capture',
+                style: TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ),
+          ),
       ],
+    );
+  }
+
+  /// 0.5x / 1x / 2x / 5x buttons. The active one shows the exact zoom
+  /// (e.g. 1.6x after pinching), like the built-in camera app.
+  Widget _zoomControls() {
+    final active = _activePreset;
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final preset in _zoomPresets)
+            GestureDetector(
+              onTap: () => _setZoom(preset),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: preset == active ? 46 : 36,
+                height: preset == active ? 46 : 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withValues(
+                    alpha: preset == active ? 0.7 : 0.35,
+                  ),
+                ),
+                child: Text(
+                  preset == active ? _zoomLabel(_zoom) : _zoomLabel(preset),
+                  style: TextStyle(
+                    color: preset == active
+                        ? const Color(0xFFFFD54F)
+                        : Colors.white,
+                    fontSize: preset == active ? 13 : 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
