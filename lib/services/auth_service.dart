@@ -10,12 +10,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class AuthService {
   static final SupabaseClient _supabase = Supabase.instance.client;
 
-  // Google "Web application" OAuth client used by Supabase's Google provider.
-  // Native sign-in asks Google for an ID token issued to this client; the
-  // Android OAuth client (package + signing SHA-1) must be in the same Google
-  // Cloud project. Client IDs are not secret.
+  // "CivicBuddy Web" OAuth client. Native sign-in asks Google for an ID token
+  // issued to this client, so:
+  // - the Android OAuth client (package + signing SHA-1) must be in the same
+  //   Google Cloud project, and
+  // - it must be listed in Supabase > Auth > Google > Client IDs (after the
+  //   browser-flow client, which stays first).
+  // Client IDs are not secret.
   static const String _googleWebClientId =
-      '155507625367-o48sepicdkci20gjh59snk97aslh5tr9.apps.googleusercontent.com';
+      '268032863942-bauhruu3qmgrlt04qqn9pe67o0rg12c8.apps.googleusercontent.com';
 
   // google_sign_in may only be initialised once per app run. The hashed nonce
   // goes into Google's ID token; Supabase checks it against the raw one.
