@@ -595,7 +595,106 @@ main { padding: 0 clamp(16px, 4vw, 48px); }
 .privacy .f-icon { background: var(--surface); }
 
 /* Download */
-.download { padding-bottom: clamp(4rem, 9vw, 7rem); }
+.download { padding-bottom: 0; }
+
+/* Install & update guide */
+.guide { padding-bottom: clamp(4rem, 9vw, 7rem); }
+.guide > h2 { margin-bottom: 1rem; }
+.guide > .lead { margin: 0 0 2rem; }
+
+.guide-tabs {
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0.3rem;
+  margin-bottom: 2rem;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.guide-tab {
+  padding: 0.65rem 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s;
+}
+
+.guide-tab.active { color: var(--on-primary); background: var(--primary); }
+
+.guide-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: guide;
+}
+
+.guide-steps[hidden] { display: none; }
+
+.guide-step {
+  position: relative;
+  counter-increment: guide;
+  padding: 1.2rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  animation: pop 0.45s both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* Step number badge */
+.guide-step::before {
+  content: counter(guide);
+  position: absolute;
+  top: 0.8rem;
+  left: 0.8rem;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  font-weight: 800;
+  color: var(--on-primary);
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  box-shadow: var(--shadow);
+}
+
+.guide-shot {
+  display: block;
+  width: min(100%, 220px);
+  height: auto;
+  aspect-ratio: 426 / 900;
+  margin: 0 auto;
+  object-fit: cover;
+  border-radius: 22px;
+  border: 6px solid #0d1410;
+  box-shadow: var(--shadow);
+  background: var(--surface-2);
+}
+
+.guide-shot-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  padding: 1rem;
+  color: var(--primary);
+  font-size: 3rem;
+  background: var(--primary-soft);
+}
+
+.guide-shot-icon .btn { font-size: 0.9rem; padding: 0.7rem 1.1rem; width: auto; }
+.guide-step h3 { margin: 1.1rem 0 0.4rem; }
+.guide-step p { margin: 0; color: var(--muted); font-size: 0.95rem; }
 
 .download-card {
   position: relative;
@@ -704,6 +803,24 @@ main { padding: 0 clamp(16px, 4vw, 48px); }
   .steps { grid-template-columns: repeat(2, 1fr); }
   .features { grid-template-columns: repeat(2, 1fr); }
   .stats { grid-template-columns: repeat(2, 1fr); }
+  .guide-steps { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Phones: swipe through the guide steps one card at a time. */
+@media (max-width: 640px) {
+  .guide-steps {
+    display: flex;
+    gap: 1rem;
+    margin: 0 calc(-1 * clamp(16px, 4vw, 48px));
+    padding: 0 clamp(16px, 4vw, 48px) 1rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .guide-steps::-webkit-scrollbar { display: none; }
+  .guide-step { flex: 0 0 82%; scroll-snap-align: center; }
+  .guide-tabs { display: flex; }
+  .guide-tab { flex: 1; padding-inline: 0.6rem; }
 }
 
 @media (max-width: 640px) {

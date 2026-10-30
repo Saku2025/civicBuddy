@@ -30,6 +30,7 @@
       <a href="#how">How it works</a>
       <a href="#features">Features</a>
       <a href="#languages">Bengali</a>
+      <a href="#guide">Install guide</a>
       <a href="#download" class="nav-cta">Download</a>
     </nav>
     <button class="theme-toggle" type="button" aria-label="Toggle dark mode">
@@ -233,6 +234,89 @@
           <p>Scan to download</p>
         </div>
       </div>
+    </section>
+
+    <!-- INSTALL & UPDATE GUIDE -->
+    <section id="guide" class="section guide">
+      <p class="eyebrow reveal">Step-by-step guide</p>
+      <h2 class="reveal">How to install &amp; update the app</h2>
+      <p class="lead reveal">CivicBuddy is installed from an APK file rather than the Play Store, so Android asks a few extra questions the first time. Here's exactly what you'll see.</p>
+
+      <div class="guide-tabs reveal" role="tablist" aria-label="Install guide">
+        <button class="guide-tab active" type="button" role="tab" aria-selected="true" aria-controls="guide-install" id="tab-install">First install</button>
+        <button class="guide-tab" type="button" role="tab" aria-selected="false" aria-controls="guide-update" id="tab-update">Update inside the app</button>
+      </div>
+
+      <!-- First install from the website -->
+      <ol class="guide-steps" id="guide-install" role="tabpanel" aria-labelledby="tab-install">
+        <li class="guide-step">
+          <div class="guide-shot guide-shot-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 19h16"/></svg>
+            <a class="btn btn-primary" data-download href="https://github.com/Saku2025/garbage-detection-App/releases/latest/download/CivicBuddy.apk">Download APK</a>
+          </div>
+          <h3>Download the APK</h3>
+          <p>Tap <b>Download APK</b> on this page (or scan the QR code), then open the downloaded file.</p>
+        </li>
+        <li class="guide-step">
+          <img class="guide-shot" src="guide-allow-source.jpg" alt="Install unknown apps screen with the Allow from this source switch" width="426" height="900" loading="lazy">
+          <h3>Allow installs from your browser</h3>
+          <p>Android blocks APK files by default. Turn on <b>Allow from this source</b>, then go back.</p>
+        </li>
+        <li class="guide-step">
+          <img class="guide-shot" src="guide-risk-warning.jpg" alt="Danger warning about installing apps from unknown sources" width="426" height="900" loading="lazy">
+          <h3>Confirm the warning</h3>
+          <p>Some phones (e.g. Xiaomi / Redmi) show this. Tick <b>I'm aware of the possible risks</b> and tap <b>OK</b> when the countdown ends.</p>
+        </li>
+        <li class="guide-step">
+          <img class="guide-shot" src="guide-install.jpg" alt="CivicBuddy install dialog with Install button" width="426" height="900" loading="lazy">
+          <h3>Tap Install</h3>
+          <p>Android shows the CivicBuddy installer. Tap <b>Install</b>.</p>
+        </li>
+        <li class="guide-step">
+          <img class="guide-shot" src="guide-play-protect.jpg" alt="Google Play Protect App scan recommended dialog" width="426" height="900" loading="lazy">
+          <h3>Google Play Protect</h3>
+          <p>CivicBuddy isn't from the Play Store, so Play Protect offers a scan. Tap <b>Scan app</b>, then continue the install when it finishes.</p>
+        </li>
+        <li class="guide-step">
+          <img class="guide-shot" src="guide-installing.jpg" alt="CivicBuddy installing progress dialog" width="426" height="900" loading="lazy">
+          <h3>Installing…</h3>
+          <p>Wait a few seconds. Then open <b>CivicBuddy</b> and sign in with Google.</p>
+        </li>
+      </ol>
+
+      <!-- Update from inside the app -->
+      <ol class="guide-steps" id="guide-update" role="tabpanel" aria-labelledby="tab-update" hidden>
+        <li class="guide-step">
+          <img class="guide-shot" src="guide-update-popup.jpg" alt="New Update Available popup showing current and new version" width="426" height="900" loading="lazy">
+          <h3>New Update Available</h3>
+          <p>When a new version is released, CivicBuddy tells you as soon as you open it. Tap <b>Update Now</b>.</p>
+        </li>
+        <li class="guide-step">
+          <img class="guide-shot" src="guide-downloading.jpg" alt="Downloading Update progress dialog" width="426" height="900" loading="lazy">
+          <h3>Downloading</h3>
+          <p>The update downloads inside the app. Keep CivicBuddy open until it reaches 100%.</p>
+        </li>
+        <li class="guide-step">
+          <img class="guide-shot" src="guide-install-update.jpg" alt="Install update dialog saying existing data will not be lost" width="426" height="900" loading="lazy">
+          <h3>Install the update</h3>
+          <p>Tap <b>Install</b>. Your login, settings and surveys are kept.</p>
+        </li>
+        <li class="guide-step">
+          <img class="guide-shot" src="guide-allow-source.jpg" alt="Install unknown apps screen with the Allow from this source switch" width="426" height="900" loading="lazy">
+          <h3>First update only: allow CivicBuddy</h3>
+          <p>If Android asks, turn on <b>Allow from this source</b> for CivicBuddy, go back and tap <b>Install</b> again. You only do this once.</p>
+        </li>
+        <li class="guide-step">
+          <img class="guide-shot" src="guide-play-protect.jpg" alt="Google Play Protect App scan recommended dialog" width="426" height="900" loading="lazy">
+          <h3>Google Play Protect</h3>
+          <p>If Play Protect appears, tap <b>Scan app</b> and continue when the scan finishes.</p>
+        </li>
+        <li class="guide-step">
+          <img class="guide-shot" src="guide-installing.jpg" alt="CivicBuddy installing progress dialog" width="426" height="900" loading="lazy">
+          <h3>Done</h3>
+          <p>After installing, open CivicBuddy again. You're on the latest version.</p>
+        </li>
+      </ol>
     </section>
   </main>
 

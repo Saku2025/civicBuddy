@@ -217,3 +217,32 @@ function renderQr() {
 }
 
 renderQr();
+
+// ------------------------------------------------------------
+// Install guide tabs
+// ------------------------------------------------------------
+
+const guideTabs = document.querySelectorAll('.guide-tab');
+
+function showGuide(tab) {
+  guideTabs.forEach((t) => {
+    const selected = t === tab;
+    t.classList.toggle('active', selected);
+    t.setAttribute('aria-selected', String(selected));
+    const panel = document.getElementById(t.getAttribute('aria-controls'));
+    panel.hidden = !selected;
+    if (selected) {
+      // Restart the staggered pop-in for the newly shown steps.
+      panel.querySelectorAll('.guide-step').forEach((step, i) => {
+        step.style.setProperty('--i', i);
+        step.style.animation = 'none';
+        void step.offsetWidth;
+        step.style.animation = '';
+      });
+      panel.scrollLeft = 0;
+    }
+  });
+}
+
+guideTabs.forEach((tab) => tab.addEventListener('click', () => showGuide(tab)));
+showGuide(document.querySelector('.guide-tab.active'));
