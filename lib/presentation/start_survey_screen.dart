@@ -907,6 +907,10 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
 
                                       height: 82,
 
+                                      // Decode small: full-resolution photos
+                                      // would use lots of memory.
+                                      cacheWidth: 246,
+
                                       fit: BoxFit.cover,
                                     ),
                                   ),

@@ -8,10 +8,10 @@ class SurveyService {
   static final SupabaseClient _client = Supabase.instance.client;
   static const String photoBucket = 'survey-photos';
 
-  // Camera photos are 2-4 MB; ~1600 px at quality 80 is a few hundred KB and
-  // still clear enough to judge a garbage spot. Saves mobile data on submit.
-  static const int _uploadMinSide = 1600;
-  static const int _uploadQuality = 80;
+  // Full-resolution camera photos are several MB; ~2048 px at quality 85 is
+  // about 0.5-1 MB and still sharp. Saves mobile data on submit.
+  static const int _uploadMinSide = 2048;
+  static const int _uploadQuality = 85;
 
   /// JPEG bytes to upload: a resized copy (orientation fixed, metadata such
   /// as embedded GPS stripped), or the original file if resizing fails.

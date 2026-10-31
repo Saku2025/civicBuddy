@@ -75,7 +75,8 @@ class _CameraScreenState extends State<CameraScreen>
 
       newController = CameraController(
         camera,
-        ResolutionPreset.high,
+        // Full resolution of this phone's camera; resized before upload.
+        ResolutionPreset.max,
         enableAudio: false,
       );
 
@@ -499,7 +500,15 @@ class _CameraScreenState extends State<CameraScreen>
     return Stack(
       children: [
         Positioned.fill(
-          child: Image.file(File(capturedImage!.path), fit: BoxFit.contain),
+          child: Image.file(
+            File(capturedImage!.path),
+            fit: BoxFit.contain,
+            // Decode at screen size, not the camera's full resolution.
+            cacheWidth:
+                (MediaQuery.sizeOf(context).width *
+                        MediaQuery.devicePixelRatioOf(context))
+                    .round(),
+          ),
         ),
 
         Positioned(
