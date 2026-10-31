@@ -72,3 +72,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Google's native "Turn on location?" dialog (see MainActivity).
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+}

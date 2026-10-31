@@ -1,29 +1,29 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:location/location.dart' as location_settings;
 
-/// Makes sure GPS is on and location permission is granted before reading
-/// the position, asking the user the way Android apps normally do:
+// Native "Turn on location?" dialog, implemented in MainActivity.kt.
+const MethodChannel _locationSettings = MethodChannel(
+  'civicbuddy/location_settings',
+);
+
+/// Makes sure location permission is granted and GPS is on before reading
+/// the position, using Android's own popups:
 ///
-/// - GPS off: Android's "Turn on location?" dialog (one tap). If that dialog
-///   is unavailable (no Google Play services, or iOS), an explanation with
-///   an "Open settings" button.
-/// - Permission not decided: Android's own permission popup.
-/// - Permission permanently denied: an explanation with "Open settings".
+/// 1. Permission not decided: "Allow CivicBuddy to access this device's
+///    location?" (Android shows this only until the user has answered).
+/// 2. GPS off: Google Play services' "Turn on location?" (one tap).
+///
+/// Only when a native popup cannot be used (permission blocked for good, or
+/// no Google Play services) does it explain and offer "Open settings".
 ///
 /// Returns true when the position can be read.
 Future<bool> ensureLocationReady(BuildContext context) async {
-  if (!await Geolocator.isLocationServiceEnabled()) {
-    if (!context.mounted) return false;
-    if (!await _turnOnLocation(context)) return false;
-  }
-
   var permission = await Geolocator.checkPermission();
 
   if (permission == LocationPermission.denied) {
-    // Shows Android's "Allow CivicBuddy to access this device's location?"
     permission = await Geolocator.requestPermission();
   }
 
@@ -51,16 +51,29 @@ Future<bool> ensureLocationReady(BuildContext context) async {
     return false;
   }
 
-  return true;
+  if (await Geolocator.isLocationServiceEnabled()) return true;
+
+  if (!context.mounted) return false;
+
+  return _turnOnLocation(context);
 }
 
 Future<bool> _turnOnLocation(BuildContext context) async {
   if (Platform.isAndroid) {
-    try {
-      // Android's one-tap "Turn on location?" dialog (Google Play services).
-      final turnedOn = await location_settings.Location().requestService();
+    String? outcome;
 
-      if (!turnedOn && context.mounted) {
+    try {
+      outcome = await _locationSettings.invokeMethod<String>('requestTurnOn');
+    } on PlatformException {
+      outcome = 'unavailable';
+    } on MissingPluginException {
+      outcome = 'unavailable';
+    }
+
+    if (outcome == 'on') return true;
+
+    if (outcome == 'declined') {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -69,12 +82,11 @@ Future<bool> _turnOnLocation(BuildContext context) async {
           ),
         );
       }
-      return turnedOn;
-    } catch (_) {
-      // Dialog unavailable on this phone; explain instead.
+      return false;
     }
   }
 
+  // No Google Play services (or not Android): explain instead.
   if (!context.mounted) return false;
 
   await _explainAndOpenSettings(
