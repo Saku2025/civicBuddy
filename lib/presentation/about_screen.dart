@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'update_dialog.dart';
 
@@ -14,6 +15,24 @@ class _AboutScreenState extends State<AboutScreen> {
   late final Future<PackageInfo> _packageInfo = PackageInfo.fromPlatform();
 
   bool _isChecking = false;
+
+  static final Uri _websiteUrl = Uri.parse('https://civicbuddy.onrender.com/');
+
+  Future<void> _openWebsite() async {
+    final opened = await launchUrl(
+      _websiteUrl,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open civicbuddy.onrender.com'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 
   Future<void> _checkForUpdates() async {
     if (_isChecking) return;
@@ -93,10 +112,30 @@ class _AboutScreenState extends State<AboutScreen> {
                         trailing: Text(info?.buildNumber ?? '…'),
                       ),
                       const Divider(height: 1),
-                      const ListTile(
-                        leading: Icon(Icons.language),
-                        title: Text('Website'),
-                        trailing: SelectableText('civicbuddy.onrender.com'),
+                      ListTile(
+                        leading: const Icon(Icons.language),
+                        title: const Text('Website'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'civicbuddy.onrender.com',
+                              style: TextStyle(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                                decoration: TextDecoration.underline,
+                                decorationColor: colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.open_in_new,
+                              size: 16,
+                              color: colorScheme.primary,
+                            ),
+                          ],
+                        ),
+                        onTap: _openWebsite,
                       ),
                     ],
                   );

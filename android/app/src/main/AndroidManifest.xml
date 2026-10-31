@@ -1,9 +1,14 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 <uses-permission android:name="android.permission.INTERNET" />
 <!-- Lets the in-app updater open the downloaded APK installer. -->
 <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+<!-- The `location` package is only used for its "Turn on location?" dialog;
+     drop the background-location service permissions it brings along. -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" tools:node="remove" />
     <application
         android:label="CivicBuddy"
         android:name="${applicationName}"
@@ -50,6 +55,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Background location service from the `location` package; unused. -->
+        <service
+            android:name="com.lyokone.location.FlutterLocationService"
+            tools:node="remove" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -60,6 +69,11 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Lets url_launcher open web links (About > Website) on Android 11+. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
         </intent>
     </queries>
 </manifest>

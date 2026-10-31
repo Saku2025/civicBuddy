@@ -8,6 +8,7 @@ import '../services/location_service.dart';
 import '../services/survey_service.dart';
 
 import 'camera_screen.dart';
+import 'location_prompt.dart';
 
 class StartSurveyScreen extends StatefulWidget {
   const StartSurveyScreen({super.key});
@@ -233,6 +234,9 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
     setState(() => _isAddingPoint = true);
 
     try {
+      // Asks to turn on GPS / allow location instead of failing.
+      if (!await ensureLocationReady(context)) return;
+
       final position = await _locationService.getCurrentLocation();
 
       final area = await _locationService.getAreaName(
@@ -1258,6 +1262,16 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
     });
 
     try {
+      if (!await ensureLocationReady(context)) {
+        if (mounted) {
+          setState(
+            () => _locationError =
+                'Location is off or not allowed. Tap Try again.',
+          );
+        }
+        return;
+      }
+
       final position = await _locationService.getCurrentLocation();
 
       final area = await _locationService.getAreaName(

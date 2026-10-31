@@ -34,6 +34,8 @@ dependencies:
   google_sign_in: ^7.2.0
   crypto: ^3.0.8
   flutter_image_compress: ^2.5.1
+  url_launcher: ^6.3.3
+  location: ^10.0.2
 
 dev_dependencies:
   flutter_test:
@@ -45,8 +47,15 @@ dev_dependencies:
 
 flutter_launcher_icons:
   android: true
-  ios: true
+  # iOS icons are already generated and use iOS's own shape; leave them.
+  ios: false
   image_path: "assets/icon/app_icon_android.png"
+  # Android 7 and older: pre-made white circle with the logo inside.
+  image_path_android: "assets/icon/icon_legacy.png"
+  # Android 8+: adaptive icon (white background, logo inside the safe zone),
+  # so every launcher shape shows the same white icon with the logo centred.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
   min_sdk_android: 21
 
 flutter:

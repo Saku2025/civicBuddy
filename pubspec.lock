@@ -640,6 +640,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.0"
+  location:
+    dependency: "direct main"
+    description:
+      name: location
+      sha256: "4cc204cc1ea237ac608d2d621ddeed40d7f62564693126420c5ebe6d1fa8c5ea"
+      url: "https://pub.dev"
+    source: hosted
+    version: "10.0.2"
+  location_platform_interface:
+    dependency: transitive
+    description:
+      name: location_platform_interface
+      sha256: "0b1aff439c77f1ec204c95ee84640f5eb8c5904cc11f0a613a6842ac1116272c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.0.0"
+  location_web:
+    dependency: transitive
+    description:
+      name: location_web
+      sha256: "1a50fe9eb4d7d33c70d65a3f2c83acbba20c380be699bcb5357b6756ef195eba"
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.0.0"
   logging:
     dependency: transitive
     description:
@@ -1022,13 +1046,13 @@ packages:
     source: hosted
     version: "2.3.1"
   url_launcher:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: url_launcher
-      sha256: f6a7e5c4835bb4e3026a04793a4199ca2d14c739ec378fdfe23fc8075d0439f8
+      sha256: e8cc955c97e06df9879140a1fe301f3d493f01b7c62dec7f46834be31d7e9fda
       url: "https://pub.dev"
     source: hosted
-    version: "6.3.2"
+    version: "6.3.3"
   url_launcher_android:
     dependency: transitive
     description:
