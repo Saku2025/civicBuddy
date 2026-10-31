@@ -35,9 +35,11 @@ class UpdateService {
   static const String _latestReleasePageUrl =
       'https://github.com/$_repositoryOwner/$_repositoryName/releases/latest';
 
+  /// Updates are installed from an APK, which only works on Android.
+  static bool get isSupported => Platform.isAndroid;
+
   static Future<UpdateInfo?> checkForUpdate() async {
-    // Updates are installed from an APK, which only works on Android.
-    if (!Platform.isAndroid) {
+    if (!isSupported) {
       return null;
     }
 

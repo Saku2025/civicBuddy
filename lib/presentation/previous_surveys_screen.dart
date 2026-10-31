@@ -619,8 +619,15 @@ class _PointCard extends StatelessWidget {
 
                   separatorBuilder: (_, _) => const SizedBox(width: 8),
 
-                  itemBuilder: (context, index) =>
-                      _PrivateSurveyPhoto(photo: photos[index]),
+                  itemBuilder: (context, index) => _PrivateSurveyPhoto(
+                    photo: photos[index],
+                    allPaths: [
+                      for (final photo in photos)
+                        photo['storage_path']?.toString() ?? '',
+                    ],
+                    index: index,
+                    title: 'Point ${point['point_number'] ?? ''}',
+                  ),
                 ),
               ),
             ],
@@ -665,9 +672,21 @@ class _PointCard extends StatelessWidget {
 }
 
 class _PrivateSurveyPhoto extends StatefulWidget {
-  const _PrivateSurveyPhoto({required this.photo});
+  const _PrivateSurveyPhoto({
+    required this.photo,
+    required this.allPaths,
+    required this.index,
+    required this.title,
+  });
 
   final Map<String, dynamic> photo;
+
+  // Every photo of the point, so the viewer can move between them.
+  final List<String> allPaths;
+
+  final int index;
+
+  final String title;
 
   @override
   State<_PrivateSurveyPhoto> createState() => _PrivateSurveyPhotoState();
@@ -695,10 +714,14 @@ class _PrivateSurveyPhotoState extends State<_PrivateSurveyPhoto> {
         .createSignedUrl(path, 3600);
   }
 
-  void _openPhoto(String url) {
+  void _openPhoto() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => _SurveyPhotoViewer(imageUrl: url),
+        builder: (_) => _SurveyPhotoViewer(
+          paths: widget.allPaths,
+          initialIndex: widget.index,
+          title: widget.title,
+        ),
       ),
     );
   }
@@ -737,7 +760,7 @@ class _PrivateSurveyPhotoState extends State<_PrivateSurveyPhoto> {
           color: Colors.transparent,
 
           child: InkWell(
-            onTap: () => _openPhoto(url),
+            onTap: _openPhoto,
 
             borderRadius: BorderRadius.circular(10),
 
@@ -775,13 +798,72 @@ class _PrivateSurveyPhotoState extends State<_PrivateSurveyPhoto> {
   }
 }
 
-class _SurveyPhotoViewer extends StatelessWidget {
-  const _SurveyPhotoViewer({required this.imageUrl});
+/// Full-screen viewer for one point's photos: swipe or use the arrows to move
+/// between them, pinch to zoom.
+class _SurveyPhotoViewer extends StatefulWidget {
+  const _SurveyPhotoViewer({
+    required this.paths,
+    required this.initialIndex,
+    required this.title,
+  });
 
-  final String imageUrl;
+  final List<String> paths;
+
+  final int initialIndex;
+
+  final String title;
+
+  @override
+  State<_SurveyPhotoViewer> createState() => _SurveyPhotoViewerState();
+}
+
+class _SurveyPhotoViewerState extends State<_SurveyPhotoViewer> {
+  late final PageController _pageController = PageController(
+    initialPage: widget.initialIndex,
+  );
+
+  late int _index = widget.initialIndex;
+
+  // While a photo is zoomed in, one-finger drags pan it instead of paging.
+  bool _zoomed = false;
+
+  // One request signs every photo of the point.
+  late final Future<Map<String, String>> _urlsFuture = _loadUrls();
+
+  Future<Map<String, String>> _loadUrls() async {
+    final results = await Supabase.instance.client.storage
+        .from(SurveyService.photoBucket)
+        .createSignedUrlsResult(
+          widget.paths.where((p) => p.isNotEmpty).toSet().toList(),
+          3600,
+        );
+
+    // Missing files are left out and show "Could not load this photo".
+    return {
+      for (final result in results)
+        if (result case SignedUrlSuccess(:final path, :final signedUrl))
+          path: signedUrl,
+    };
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _goTo(int index) {
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final count = widget.paths.length;
+
     return Scaffold(
       backgroundColor: Colors.black,
 
@@ -790,17 +872,156 @@ class _SurveyPhotoViewer extends StatelessWidget {
 
         foregroundColor: Colors.white,
 
-        title: const Text('Photo'),
+        title: Text(
+          count > 1 ? '${widget.title} · ${_index + 1} / $count' : widget.title,
+        ),
       ),
 
-      body: Center(
-        child: InteractiveViewer(
-          minScale: 0.5,
+      body: FutureBuilder<Map<String, String>>(
+        future: _urlsFuture,
 
-          maxScale: 5,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            );
+          }
 
+          final urls = snapshot.data ?? const <String, String>{};
+
+          return Stack(
+            children: [
+              PageView.builder(
+                controller: _pageController,
+
+                physics: _zoomed
+                    ? const NeverScrollableScrollPhysics()
+                    : const PageScrollPhysics(),
+
+                itemCount: count,
+
+                onPageChanged: (index) => setState(() {
+                  _index = index;
+                  _zoomed = false;
+                }),
+
+                itemBuilder: (context, index) => _ZoomablePhoto(
+                  url: urls[widget.paths[index]],
+                  onZoomChanged: (zoomed) {
+                    if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
+                  },
+                ),
+              ),
+
+              if (count > 1 && _index > 0)
+                _arrow(
+                  Alignment.centerLeft,
+                  Icons.chevron_left,
+                  () => _goTo(_index - 1),
+                ),
+
+              if (count > 1 && _index < count - 1)
+                _arrow(
+                  Alignment.centerRight,
+                  Icons.chevron_right,
+                  () => _goTo(_index + 1),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _arrow(Alignment alignment, IconData icon, VoidCallback onPressed) {
+    return Align(
+      alignment: alignment,
+
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+
+        child: IconButton.filled(
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.black.withValues(alpha: 0.5),
+            foregroundColor: Colors.white,
+          ),
+
+          onPressed: onPressed,
+
+          icon: Icon(icon, size: 30),
+        ),
+      ),
+    );
+  }
+}
+
+class _ZoomablePhoto extends StatefulWidget {
+  const _ZoomablePhoto({required this.url, required this.onZoomChanged});
+
+  final String? url;
+
+  final ValueChanged<bool> onZoomChanged;
+
+  @override
+  State<_ZoomablePhoto> createState() => _ZoomablePhotoState();
+}
+
+class _ZoomablePhotoState extends State<_ZoomablePhoto> {
+  final TransformationController _controller = TransformationController();
+
+  bool get _isZoomed => _controller.value.getMaxScaleOnAxis() > 1.01;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final url = widget.url;
+
+    if (url == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+
+          child: Text(
+            'Could not load this photo.',
+
+            style: TextStyle(color: Colors.white),
+
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      // Double-tap resets the zoom.
+      onDoubleTap: () {
+        _controller.value = Matrix4.identity();
+        widget.onZoomChanged(false);
+      },
+
+      child: InteractiveViewer(
+        transformationController: _controller,
+
+        minScale: 1,
+
+        maxScale: 5,
+
+        // Panning only when zoomed, so swipes reach the PageView otherwise.
+        panEnabled: _isZoomed,
+
+        onInteractionEnd: (_) {
+          setState(() {});
+          widget.onZoomChanged(_isZoomed);
+        },
+
+        child: Center(
           child: Image.network(
-            imageUrl,
+            url,
 
             fit: BoxFit.contain,
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../services/theme_service.dart';
+import 'about_screen.dart';
 import 'start_survey_screen.dart';
 import 'previous_surveys_screen.dart';
 
@@ -15,6 +16,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String _userName = '';
   String _userEmail = '';
+  // Google profile picture, if the account has one.
+  String? _photoUrl;
 
   @override
   void initState() {
@@ -35,9 +38,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 '')
             .toString()
             .trim();
+    final photoUrl = (metadata['avatar_url'] ?? metadata['picture'] ?? '')
+        .toString()
+        .trim();
 
     if (!mounted) return;
     setState(() {
+      _photoUrl = photoUrl.isEmpty ? null : photoUrl;
       _userEmail = email;
       _userName = name.isNotEmpty
           ? name
@@ -58,6 +65,28 @@ class _HomeScreenState extends State<HomeScreen> {
     return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
   }
 
+  /// Google photo, with the initials underneath while it loads or if it
+  /// fails.
+  Widget _avatar({required double radius, required double fontSize}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final photoUrl = _photoUrl;
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: colorScheme.primaryContainer,
+      foregroundImage: photoUrl == null ? null : NetworkImage(photoUrl),
+      onForegroundImageError: photoUrl == null ? null : (_, _) {},
+      child: Text(
+        _initials,
+        style: TextStyle(
+          color: colorScheme.onPrimaryContainer,
+          fontWeight: FontWeight.bold,
+          fontSize: fontSize,
+        ),
+      ),
+    );
+  }
+
   Future<void> _showProfileMenu() async {
     final colorScheme = Theme.of(context).colorScheme;
     final choice = await showModalBottomSheet<String>(
@@ -72,18 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircleAvatar(
-                  radius: 32,
-                  backgroundColor: colorScheme.primaryContainer,
-                  child: Text(
-                    _initials,
-                    style: TextStyle(
-                      color: colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                    ),
-                  ),
-                ),
+                _avatar(radius: 32, fontSize: 20),
                 const SizedBox(height: 12),
                 Text(
                   _userName.isEmpty ? 'User profile' : _userName,
@@ -101,6 +119,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   title: const Text('Appearance'),
                   subtitle: const Text('Change app theme'),
                   onTap: () => Navigator.pop(sheetContext, 'appearance'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('About'),
+                  subtitle: const Text('App version and updates'),
+                  onTap: () => Navigator.pop(sheetContext, 'about'),
                 ),
                 const Divider(height: 24),
                 SizedBox(
@@ -126,6 +150,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     if (choice == 'appearance') {
       await _showThemeSelector();
+    } else if (choice == 'about') {
+      _openScreen(const AboutScreen());
     } else if (choice == 'logout') {
       await _logout();
     }
@@ -200,18 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             onPressed: _showProfileMenu,
             tooltip: 'Profile and sign out',
-            icon: CircleAvatar(
-              radius: 17,
-              backgroundColor: colorScheme.primaryContainer,
-              child: Text(
-                _initials,
-                style: TextStyle(
-                  color: colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-            ),
+            icon: _avatar(radius: 17, fontSize: 12),
           ),
           const SizedBox(width: 8),
         ],

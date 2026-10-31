@@ -5,12 +5,37 @@ import '../services/update_service.dart';
 
 /// Checks GitHub for a newer release and, if there is one, offers to
 /// download and install it.
-Future<void> checkForAppUpdate(BuildContext context) async {
+///
+/// The automatic check at startup stays silent otherwise; with [manual]
+/// (the About screen's button) the user is also told when they are up to
+/// date or the check failed.
+Future<void> checkForAppUpdate(
+  BuildContext context, {
+  bool manual = false,
+}) async {
   final updateInfo = await UpdateService.checkForUpdate();
 
-  if (!context.mounted || updateInfo == null) return;
+  if (!context.mounted) return;
 
-  if (!updateInfo.updateAvailable) return;
+  if (updateInfo == null || !updateInfo.updateAvailable) {
+    if (manual) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            updateInfo == null
+                ? (UpdateService.isSupported
+                      ? 'Could not check for updates. Check your internet '
+                            'connection and try again.'
+                      : 'Updates are only available in the Android app.')
+                : 'You are on the latest version '
+                      '(v${updateInfo.currentVersion}).',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    return;
+  }
 
   final shouldUpdate = await showDialog<bool>(
     context: context,
