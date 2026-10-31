@@ -23,7 +23,7 @@ class UpdateInfo {
 
 class UpdateService {
   static const String _repositoryOwner = 'Saku2025';
-  static const String _repositoryName = 'garbage-detection-App';
+  static const String _repositoryName = 'civicBuddy';
 
   static const String _latestReleaseUrl =
       'https://api.github.com/repos/'
@@ -84,20 +84,34 @@ class UpdateService {
     final client = http.Client();
 
     try {
-      final request = http.Request('GET', Uri.parse(_latestReleasePageUrl))
-        ..followRedirects = false;
+      var url = Uri.parse(_latestReleasePageUrl);
 
-      final response = await client
-          .send(request)
-          .timeout(const Duration(seconds: 15));
+      // Follow redirects ourselves until one points at /releases/tag/<tag>.
+      // Earlier hops can be "repository moved" redirects after a rename.
+      for (var hop = 0; hop < 5; hop++) {
+        final request = http.Request('GET', url)..followRedirects = false;
 
-      final location = response.headers['location'];
+        final response = await client
+            .send(request)
+            .timeout(const Duration(seconds: 15));
+        await response.stream.drain<void>();
 
-      if (location == null) {
-        return null;
+        final location = response.headers['location'];
+
+        if (location == null) {
+          return null;
+        }
+
+        final info = parseReleaseRedirect(location, currentVersion);
+
+        if (info != null) {
+          return info;
+        }
+
+        url = url.resolve(location);
       }
 
-      return parseReleaseRedirect(location, currentVersion);
+      return null;
     } catch (e) {
       return null;
     } finally {

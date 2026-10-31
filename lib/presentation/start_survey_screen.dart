@@ -101,6 +101,15 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
 
   bool _isSavingSurvey = false;
 
+  // Submit progress, shown under the survey while uploading.
+  int _photosUploaded = 0;
+
+  int _photosTotal = 0;
+
+  /// Points or interviews that would be lost by leaving the screen.
+  bool get _hasUnsavedWork =>
+      !_surveyEnded && (_points.isNotEmpty || _interviews.isNotEmpty);
+
   bool _surveyEnded = false;
 
   static const List<Map<String, dynamic>> _surveyorQuestions = [
@@ -496,7 +505,11 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
 
     if (confirmed != true || !mounted) return;
 
-    setState(() => _isSavingSurvey = true);
+    setState(() {
+      _isSavingSurvey = true;
+      _photosUploaded = 0;
+      _photosTotal = _points.fold(0, (sum, p) => sum + p.photos.length);
+    });
     try {
       final pointDocuments = <Map<String, dynamic>>[];
 
@@ -514,6 +527,7 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
             'storage_path': storagePath,
             'photo_number': i + 1,
           });
+          if (mounted) setState(() => _photosUploaded++);
         }
 
         pointDocuments.add({
@@ -585,10 +599,59 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
     }
   }
 
+  /// Back button / gesture while the survey has unsaved work.
+  Future<void> _confirmLeave() async {
+    if (_isSavingSurvey) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please wait until the survey finishes uploading.'),
+        ),
+      );
+      return;
+    }
+
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard this survey?'),
+        content: Text(
+          'You have ${_points.length} point(s) and ${_interviews.length} '
+          'interview(s) that are not submitted yet. Leaving now deletes them.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep editing'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+
+    if (discard == true && mounted) Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
+    return PopScope(
+      canPop: !_hasUnsavedWork && !_isSavingSurvey,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmLeave();
+      },
+      child: _buildSurvey(context, colors),
+    );
+  }
+
+  Widget _buildSurvey(BuildContext context, ColorScheme colors) {
     return Scaffold(
       appBar: AppBar(title: const Text('Start Survey')),
 
@@ -1022,6 +1085,40 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
               ),
             ),
 
+            // Upload progress while submitting.
+            if (_isSavingSurvey)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+
+                  children: [
+                    Text(
+                      _photosUploaded < _photosTotal
+                          ? 'Uploading photo ${_photosUploaded + 1} of $_photosTotal…'
+                          : 'Saving survey…',
+
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+
+                      child: LinearProgressIndicator(
+                        minHeight: 6,
+
+                        value: _photosTotal == 0
+                            ? null
+                            : _photosUploaded / _photosTotal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
 
@@ -1042,7 +1139,11 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
                   ),
 
                   label: Text(
-                    _surveyEnded ? 'Survey Completed' : 'Complete & End Survey',
+                    _surveyEnded
+                        ? 'Survey Completed'
+                        : _isSavingSurvey
+                        ? 'Submitting…'
+                        : 'Complete & End Survey',
                   ),
                 ),
               ),

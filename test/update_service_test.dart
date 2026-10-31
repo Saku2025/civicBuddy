@@ -43,7 +43,7 @@ void main() {
 
   test('reads the version from the release page redirect', () {
     final info = UpdateService.parseReleaseRedirect(
-      'https://github.com/Saku2025/garbage-detection-App/releases/tag/v1.7.4',
+      'https://github.com/Saku2025/civicBuddy/releases/tag/v1.7.4',
       '1.7.3',
     );
 
@@ -51,7 +51,7 @@ void main() {
     expect(info.latestVersion, '1.7.4');
     expect(
       info.downloadUrl,
-      'https://github.com/Saku2025/garbage-detection-App'
+      'https://github.com/Saku2025/civicBuddy'
       '/releases/download/v1.7.4/garbage_detection_v1.7.4.apk',
     );
   });
@@ -59,7 +59,7 @@ void main() {
   test('ignores redirects that are not a release tag', () {
     expect(
       UpdateService.parseReleaseRedirect(
-        'https://github.com/Saku2025/garbage-detection-App/releases',
+        'https://github.com/Saku2025/civicBuddy/releases',
         '1.7.3',
       ),
       isNull,

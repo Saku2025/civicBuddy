@@ -1,12 +1,12 @@
 // CivicBuddy landing page behaviour.
 
 const RELEASES_API =
-  'https://api.github.com/repos/Saku2025/garbage-detection-App/releases/latest';
+  'https://api.github.com/repos/Saku2025/civicBuddy/releases/latest';
 // Permanent direct download of the newest APK (every release attaches a
 // CivicBuddy.apk). Used by the buttons and the QR code; needs no API call,
 // so it works even when GitHub's API rate limit is hit.
 const LATEST_APK_URL =
-  'https://github.com/Saku2025/garbage-detection-App/releases/latest/download/CivicBuddy.apk';
+  'https://github.com/Saku2025/civicBuddy/releases/latest/download/CivicBuddy.apk';
 
 const root = document.documentElement;
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

@@ -1,10 +1,34 @@
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SurveyService {
   static final SupabaseClient _client = Supabase.instance.client;
   static const String photoBucket = 'survey-photos';
+
+  // Camera photos are 2-4 MB; ~1600 px at quality 80 is a few hundred KB and
+  // still clear enough to judge a garbage spot. Saves mobile data on submit.
+  static const int _uploadMinSide = 1600;
+  static const int _uploadQuality = 80;
+
+  /// JPEG bytes to upload: a resized copy (orientation fixed, metadata such
+  /// as embedded GPS stripped), or the original file if resizing fails.
+  static Future<Uint8List> _compressForUpload(File photoFile) async {
+    try {
+      final compressed = await FlutterImageCompress.compressWithFile(
+        photoFile.path,
+        minWidth: _uploadMinSide,
+        minHeight: _uploadMinSide,
+        quality: _uploadQuality,
+      );
+      if (compressed != null && compressed.isNotEmpty) return compressed;
+    } catch (_) {
+      // Fall through to the original photo.
+    }
+    return photoFile.readAsBytes();
+  }
 
   static Future<String> uploadPhoto({
     required String surveyId,
@@ -26,9 +50,9 @@ class SurveyService {
 
     await _client.storage
         .from(photoBucket)
-        .upload(
+        .uploadBinary(
           path,
-          photoFile,
+          await _compressForUpload(photoFile),
           fileOptions: const FileOptions(
             upsert: true,
             contentType: 'image/jpeg',
