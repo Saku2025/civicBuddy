@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+// Only for openAppSettings (opens CivicBuddy's page in Android Settings).
+import 'package:geolocator/geolocator.dart' show Geolocator;
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -10,11 +12,15 @@ class CameraScreen extends StatefulWidget {
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> {
+class _CameraScreenState extends State<CameraScreen>
+    with WidgetsBindingObserver {
   CameraController? controller;
 
   bool isInitializing = true;
   bool isTakingPicture = false;
+
+  // The user said "Don't allow" to Android's camera permission popup.
+  bool _permissionDenied = false;
 
   XFile? capturedImage;
 
@@ -28,10 +34,33 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     initializeCamera();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Back from Settings after allowing the camera: try again.
+    if (state == AppLifecycleState.resumed &&
+        _permissionDenied &&
+        !isInitializing) {
+      initializeCamera();
+    }
+  }
+
+  /// Starts the camera. The camera plugin asks Android's native permission
+  /// popup ("Allow CivicBuddy to take pictures and record video?") here when
+  /// needed.
   Future<void> initializeCamera() async {
+    CameraController? newController;
+
+    if (controller == null && !isInitializing) {
+      setState(() {
+        isInitializing = true;
+        _permissionDenied = false;
+      });
+    }
+
     try {
       final cameras = await availableCameras();
 
@@ -44,7 +73,7 @@ class _CameraScreenState extends State<CameraScreen> {
         orElse: () => cameras.first,
       );
 
-      final newController = CameraController(
+      newController = CameraController(
         camera,
         ResolutionPreset.high,
         enableAudio: false,
@@ -60,18 +89,35 @@ class _CameraScreenState extends State<CameraScreen> {
       setState(() {
         controller = newController;
         isInitializing = false;
+        _permissionDenied = false;
       });
 
       _loadZoomRange(newController);
     } catch (e) {
+      await newController?.dispose();
+
       if (!mounted) return;
+
+      final denied =
+          e is CameraException &&
+          const {
+            'CameraAccessDenied', // Android and iOS
+            'CameraAccessDeniedWithoutPrompt', // iOS
+            'CameraAccessRestricted', // iOS
+          }.contains(e.code);
 
       setState(() {
         isInitializing = false;
+        _permissionDenied = denied;
       });
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Camera error: $e')));
+      if (!denied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not start the camera. Please try again.'),
+          ),
+        );
+      }
     }
   }
 
@@ -189,8 +235,68 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     controller?.dispose();
     super.dispose();
+  }
+
+  /// Shown instead of the preview when the camera could not start. When the
+  /// permission was denied, "Allow camera" asks Android's popup again (while
+  /// Android still allows asking) and "Open settings" covers the case where
+  /// Android no longer shows it.
+  Widget _cameraBlockedView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _permissionDenied
+                  ? Icons.no_photography_outlined
+                  : Icons.videocam_off_outlined,
+              color: Colors.white,
+              size: 56,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _permissionDenied
+                  ? 'Camera permission needed'
+                  : 'Camera unavailable',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _permissionDenied
+                  ? 'CivicBuddy needs the camera to take photos of garbage '
+                        'spots. Tap Allow camera, or allow it in Settings.'
+                  : 'The camera could not be started.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 15),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: initializeCamera,
+              icon: const Icon(Icons.camera_alt_outlined),
+              label: Text(_permissionDenied ? 'Allow camera' : 'Try again'),
+            ),
+            if (_permissionDenied) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                onPressed: Geolocator.openAppSettings,
+                child: const Text('Open settings'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -226,12 +332,7 @@ class _CameraScreenState extends State<CameraScreen> {
                   },
                   child: Center(child: CameraPreview(controller!)),
                 )
-              : const Center(
-                  child: Text(
-                    'Camera unavailable',
-                    style: TextStyle(color: Colors.white, fontSize: 18),
-                  ),
-                ),
+              : _cameraBlockedView(),
         ),
 
         Positioned(
@@ -263,33 +364,35 @@ class _CameraScreenState extends State<CameraScreen> {
           ),
         ),
 
-        Positioned(
-          bottom: 30,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: GestureDetector(
-              onTap: captureImage,
-              child: Container(
-                width: 82,
-                height: 82,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 5),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(7),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: isTakingPicture ? Colors.grey : Colors.white,
-                      shape: BoxShape.circle,
+        // Shutter and hints only while the camera is running.
+        if (controller != null && controller!.value.isInitialized)
+          Positioned(
+            bottom: 30,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: GestureDetector(
+                onTap: captureImage,
+                child: Container(
+                  width: 82,
+                  height: 82,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 5),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(7),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isTakingPicture ? Colors.grey : Colors.white,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
 
         // Current zoom, shown large while pinching.
         Positioned.fill(
@@ -330,7 +433,7 @@ class _CameraScreenState extends State<CameraScreen> {
             right: 0,
             child: Center(child: _zoomControls()),
           )
-        else
+        else if (controller != null && controller!.value.isInitialized)
           const Positioned(
             bottom: 125,
             left: 0,
