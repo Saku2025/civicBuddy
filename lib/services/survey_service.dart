@@ -96,4 +96,56 @@ class SurveyService {
         .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(rows);
   }
+
+  /// Storage paths of every photo in a survey row from [getPreviousSurveys].
+  static List<String> photoPathsOf(Map<String, dynamic> survey) {
+    final data = survey['survey_data'];
+    final points = data is Map ? data['points'] : null;
+
+    return [
+      if (points is List)
+        for (final point in points.whereType<Map>())
+          if (point['photos'] is List)
+            for (final photo in (point['photos'] as List).whereType<Map>())
+              if ((photo['storage_path']?.toString() ?? '').isNotEmpty)
+                photo['storage_path'].toString(),
+    ];
+  }
+
+  /// Permanently deletes a survey and its photos.
+  ///
+  /// The row is deleted first: if Supabase refuses (no DELETE policy), it
+  /// throws and nothing is removed. Photos are removed afterwards; a failure
+  /// there only leaves unused files in storage.
+  static Future<void> deleteSurvey(Map<String, dynamic> survey) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('You must be signed in to delete surveys.');
+    }
+
+    // Row-level security silently skips rows it does not allow, so ask for
+    // the deleted rows back to know whether anything was deleted.
+    final deleted = await _client
+        .from('surveys')
+        .delete()
+        .eq('id', survey['id'])
+        .eq('user_id', user.id)
+        .select('id');
+
+    if (deleted.isEmpty) {
+      throw Exception(
+        'This survey could not be deleted. Deleting surveys is not enabled '
+        'in the database yet.',
+      );
+    }
+
+    final paths = photoPathsOf(survey);
+    if (paths.isEmpty) return;
+
+    try {
+      await _client.storage.from(photoBucket).remove(paths);
+    } catch (_) {
+      // The survey is already gone; leftover files are only wasted storage.
+    }
+  }
 }

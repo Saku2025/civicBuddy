@@ -31,6 +31,93 @@ class _PreviousSurveysScreenState extends State<PreviousSurveysScreen> {
     await _surveysFuture;
   }
 
+  // Row ids being deleted (show a spinner) or already deleted (hidden
+  // without reloading the whole list).
+  final Set<Object?> _deletingIds = {};
+
+  final Set<Object?> _deletedIds = {};
+
+  int _interviewCount(Map<String, dynamic> survey) {
+    final data = survey['survey_data'];
+
+    if (data is! Map) return 0;
+
+    if (data['citizens'] is List) return (data['citizens'] as List).length;
+
+    return data['citizen'] is Map ? 1 : 0;
+  }
+
+  Future<void> _deleteSurvey(Map<String, dynamic> survey) async {
+    final id = survey['survey_id']?.toString() ?? 'this survey';
+    final points = _pointCount(survey);
+    final photos = _photoCount(survey);
+    final interviews = _interviewCount(survey);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+
+      builder: (ctx) => AlertDialog(
+        icon: Icon(
+          Icons.delete_forever_outlined,
+          color: Theme.of(ctx).colorScheme.error,
+        ),
+
+        title: const Text('Delete survey?'),
+
+        content: Text(
+          '$id\n\nThis permanently deletes its $points point(s), '
+          '$photos photo(s) and $interviews citizen interview(s). '
+          'This cannot be undone.',
+        ),
+
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+
+            child: const Text('Cancel'),
+          ),
+
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+
+            onPressed: () => Navigator.pop(ctx, true),
+
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deletingIds.add(survey['id']));
+
+    try {
+      await SurveyService.deleteSurvey(survey);
+
+      if (!mounted) return;
+
+      setState(() => _deletedIds.add(survey['id']));
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Deleted $id.')));
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _deletingIds.remove(survey['id']));
+    }
+  }
+
   String _dateText(dynamic value) {
     if (value == null) return 'Date unavailable';
 
@@ -112,7 +199,9 @@ class _PreviousSurveysScreenState extends State<PreviousSurveysScreen> {
             );
           }
 
-          final surveys = snapshot.data ?? [];
+          final surveys = (snapshot.data ?? [])
+              .where((s) => !_deletedIds.contains(s['id']))
+              .toList();
 
           if (surveys.isEmpty) {
             return const _MessageState(
@@ -185,7 +274,37 @@ class _PreviousSurveysScreenState extends State<PreviousSurveysScreen> {
 
                     isThreeLine: true,
 
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+
+                      children: [
+                        _deletingIds.contains(survey['id'])
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+
+                                child: SizedBox(
+                                  width: 22,
+
+                                  height: 22,
+
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : IconButton(
+                                tooltip: 'Delete survey',
+
+                                color: colors.error,
+
+                                onPressed: () => _deleteSurvey(survey),
+
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
 
                     onTap: () => Navigator.push(
                       context,
