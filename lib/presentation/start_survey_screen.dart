@@ -455,6 +455,72 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
     await _saveDraft();
   }
 
+  /// Removes one photo from a point (after confirming) and deletes its file.
+  Future<void> _removePhoto(_SurveyPoint point, int index) async {
+    if (_surveyEnded || index >= point.photos.length) return;
+
+    final photo = point.photos[index];
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+
+      builder: (ctx) => AlertDialog(
+        title: Text('Remove photo ${index + 1}?'),
+
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+
+              child: Image.file(
+                File(photo.path),
+
+                height: 180,
+
+                cacheHeight: 540,
+
+                fit: BoxFit.contain,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Text('This photo will be removed from Point ${point.number}.'),
+          ],
+        ),
+
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+
+            child: const Text('Cancel'),
+          ),
+
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+
+            onPressed: () => Navigator.pop(ctx, true),
+
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => point.photos.remove(photo));
+
+    await DraftService.deletePhoto(photo.path);
+    await _saveDraft();
+  }
+
   Future<void> _removePoint(_SurveyPoint point) async {
     if (_surveyEnded) return;
 
@@ -1050,22 +1116,59 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
                                   separatorBuilder: (_, _) =>
                                       const SizedBox(width: 8),
 
-                                  itemBuilder: (_, i) => ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
+                                  itemBuilder: (_, i) => Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
 
-                                    child: Image.file(
-                                      File(point.photos[i].path),
+                                        child: Image.file(
+                                          File(point.photos[i].path),
 
-                                      width: 82,
+                                          width: 82,
 
-                                      height: 82,
+                                          height: 82,
 
-                                      // Decode small: full-resolution photos
-                                      // would use lots of memory.
-                                      cacheWidth: 246,
+                                          // Decode small: full-resolution
+                                          // photos would use lots of memory.
+                                          cacheWidth: 246,
 
-                                      fit: BoxFit.cover,
-                                    ),
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+
+                                      if (!_surveyEnded)
+                                        Positioned(
+                                          top: 2,
+
+                                          right: 2,
+
+                                          child: Material(
+                                            color: Colors.black54,
+
+                                            shape: const CircleBorder(),
+
+                                            child: InkWell(
+                                              customBorder:
+                                                  const CircleBorder(),
+
+                                              onTap: () =>
+                                                  _removePhoto(point, i),
+
+                                              child: const Padding(
+                                                padding: EdgeInsets.all(4),
+
+                                                child: Icon(
+                                                  Icons.close,
+
+                                                  size: 16,
+
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
                               ),
