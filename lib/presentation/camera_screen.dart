@@ -691,48 +691,53 @@ class _CameraScreenState extends State<CameraScreen>
 
   /// Auto / Flash on capture / Always on / Off. The chosen one is yellow.
   Widget _flashMenu() {
-    return Container(
+    return Material(
       key: const ValueKey('open'),
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(18),
+      color: Colors.black.withValues(alpha: 0.7),
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      // The menu sits in a Positioned with only `right` set, so its width is
+      // unbounded; IntrinsicWidth sizes it to the widest option so the rows
+      // can stretch (a stretched Column with unbounded width fails layout).
+      child: IntrinsicWidth(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final option in _flashOptions) _flashMenuItem(option),
+            ],
+          ),
+        ),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final option in _flashOptions)
-            InkWell(
-              onTap: () => _selectFlashMode(option.mode),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 10, 14, 10),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      option.label,
-                      style: TextStyle(
-                        color: option.mode == _flashMode
-                            ? const Color(0xFFFFD54F)
-                            : Colors.white,
-                        fontWeight: option.mode == _flashMode
-                            ? FontWeight.bold
-                            : FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Icon(
-                      option.icon,
-                      color: option.mode == _flashMode
-                          ? const Color(0xFFFFD54F)
-                          : Colors.white,
-                    ),
-                  ],
-                ),
+    );
+  }
+
+  Widget _flashMenuItem(
+    ({FlashMode mode, IconData icon, String label}) option,
+  ) {
+    final selected = option.mode == _flashMode;
+    final color = selected ? const Color(0xFFFFD54F) : Colors.white;
+
+    return InkWell(
+      onTap: () => _selectFlashMode(option.mode),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 10, 14, 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              option.label,
+              style: TextStyle(
+                color: color,
+                fontWeight: selected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
-        ],
+            const SizedBox(width: 16),
+            Icon(option.icon, color: color),
+          ],
+        ),
       ),
     );
   }
