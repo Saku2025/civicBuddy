@@ -14,6 +14,14 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase config for update push notifications. Without the file the app
+// still builds and runs, just without pushes.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.warn("android/app/google-services.json not found: update push notifications are disabled.")
+}
+
 android {
     namespace = "com.civicbuddy.app"
     compileSdk = flutter.compileSdkVersion

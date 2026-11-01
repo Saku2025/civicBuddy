@@ -175,3 +175,46 @@ jobs:
             --title "CivicBuddy v$VERSION" \
             --notes-file release_notes.md \
             --latest
+
+      # Phone notification "CivicBuddy has a new version" to every installed
+      # app (they subscribe to the app_updates topic), via Firebase Cloud
+      # Messaging. Needs the FIREBASE_SERVICE_ACCOUNT secret (service account
+      # JSON key); without it the release is still published, just no push.
+      - name: Send update push notification
+        if: steps.version.outputs.exists == 'false'
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::warning::FIREBASE_SERVICE_ACCOUNT secret not set: no update push sent."
+            exit 0
+          fi
+          pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import json, os
+          import google.auth.transport.requests
+          from google.oauth2 import service_account
+
+          info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+          creds = service_account.Credentials.from_service_account_info(
+              info, scopes=["https://www.googleapis.com/auth/firebase.messaging"])
+          session = google.auth.transport.requests.AuthorizedSession(creds)
+          version = os.environ["VERSION"]
+          response = session.post(
+              f"https://fcm.googleapis.com/v1/projects/{info['project_id']}/messages:send",
+              json={"message": {
+                  "topic": "app_updates",
+                  "notification": {
+                      "title": "CivicBuddy has a new version",
+                      "body": f"Version {version} is ready. Tap to update to the latest version.",
+                  },
+                  "android": {
+                      "priority": "high",
+                      "notification": {"channel_id": "app_updates"},
+                  },
+              }})
+          print(response.status_code, response.text)
+          if not response.ok:
+              print(f"::warning::Update push failed ({response.status_code}); the release itself is published.")
+          PY

@@ -21,11 +21,11 @@ Future<void> main() async {
 
   await ThemeService.init();
 
-  // Background check for new releases (phone notification when found).
+  // Push notifications for new releases (Firebase Cloud Messaging).
   try {
-    await UpdateNotifier.start();
+    await UpdateNotifier.start().timeout(const Duration(seconds: 10));
   } catch (_) {
-    // Never block app start on this.
+    // Never block app start on this (e.g. no Firebase config, offline).
   }
 
   runApp(const CivicBuddyApp());
