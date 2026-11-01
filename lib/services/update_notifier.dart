@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show Color;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -35,7 +36,7 @@ class UpdateNotifier {
     // The channel named in the push (and in AndroidManifest.xml).
     await _notifications.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('ic_launcher_foreground'),
+        android: AndroidInitializationSettings('ic_notification'),
       ),
     );
     await _notifications
@@ -59,7 +60,13 @@ class UpdateNotifier {
             channelDescription: _channel.description,
             importance: Importance.high,
             priority: Priority.high,
-            icon: 'ic_launcher_foreground',
+            // White hard hat (status bar) tinted green, with the full-colour
+            // logo as the picture.
+            icon: 'ic_notification',
+            color: const Color(0xFF256D3F),
+            largeIcon: const DrawableResourceAndroidBitmap(
+              'notification_logo',
+            ),
           ),
         ),
       );
