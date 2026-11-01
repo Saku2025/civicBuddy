@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "356176098999",
+    "project_id": "civicbuddy-d0668",
+    "storage_bucket": "civicbuddy-d0668.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:356176098999:android:b2517e68ac1ed2df17bf32",
+        "android_client_info": {
+          "package_name": "com.example.my_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB13lyfywuwrLWS_U0D8c8A8ya3WBhWOmY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
