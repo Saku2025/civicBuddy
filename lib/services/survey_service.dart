@@ -30,18 +30,25 @@ class SurveyService {
     return photoFile.readAsBytes();
   }
 
+  /// Writes the resized upload copy of [photoFile] to [outPath], so its exact
+  /// size is known before uploading starts.
+  static Future<File> prepareForUpload(File photoFile, String outPath) async {
+    if (!await photoFile.exists()) {
+      throw Exception('A captured photo could not be found on this device.');
+    }
+    return File(outPath).writeAsBytes(await _compressForUpload(photoFile));
+  }
+
+  /// Uploads a photo prepared by [prepareForUpload].
   static Future<String> uploadPhoto({
     required String surveyId,
     required int pointNumber,
-    required File photoFile,
+    required File preparedFile,
     required int photoIndex,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
       throw Exception('You must be signed in to upload survey photos.');
-    }
-    if (!await photoFile.exists()) {
-      throw Exception('A captured photo could not be found on this device.');
     }
 
     final safeSurveyId = surveyId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
@@ -52,7 +59,7 @@ class SurveyService {
         .from(photoBucket)
         .uploadBinary(
           path,
-          await _compressForUpload(photoFile),
+          await preparedFile.readAsBytes(),
           fileOptions: const FileOptions(
             upsert: true,
             contentType: 'image/jpeg',

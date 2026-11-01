@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../services/auth_service.dart';
 import '../services/draft_service.dart';
@@ -249,6 +251,41 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
   int _photosUploaded = 0;
 
   int _photosTotal = 0;
+
+  // Upload size in bytes, known once the photos are prepared (compressed).
+  bool _preparingPhotos = false;
+
+  int _bytesUploaded = 0;
+
+  int _bytesTotal = 0;
+
+  // Pause takes effect between photos; null while not paused.
+  Completer<void>? _resumeGate;
+
+  bool get _uploadPaused => _resumeGate != null;
+
+  // Photos already uploaded in this session, so a retry after a failed
+  // submit skips them. Key: point, index and local file.
+  final Map<String, String> _uploadedPhotoPaths = {};
+
+  void _togglePause() {
+    setState(() {
+      if (_resumeGate == null) {
+        _resumeGate = Completer<void>();
+      } else {
+        _resumeGate!.complete();
+        _resumeGate = null;
+      }
+    });
+  }
+
+  Future<void> _waitIfPaused() async {
+    final gate = _resumeGate;
+    if (gate != null) await gate.future;
+  }
+
+  static String _formatMb(int bytes) =>
+      '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 
   /// Points or interviews that would be lost by leaving the screen.
   bool get _hasUnsavedWork =>
@@ -742,30 +779,79 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
 
     if (confirmed != true || !mounted) return;
 
+    final pending = <({_SurveyPoint point, int index, String key})>[
+      for (final point in _points)
+        for (var i = 0; i < point.photos.length; i++)
+          (
+            point: point,
+            index: i,
+            key: '${point.number}_${i}_${point.photos[i].path}',
+          ),
+    ].where((p) => !_uploadedPhotoPaths.containsKey(p.key)).toList();
+
     setState(() {
       _isSavingSurvey = true;
+      _preparingPhotos = true;
       _photosUploaded = 0;
-      _photosTotal = _points.fold(0, (sum, p) => sum + p.photos.length);
+      _photosTotal = pending.length;
+      _bytesUploaded = 0;
+      _bytesTotal = 0;
+      _resumeGate = null;
     });
+
+    Directory? uploadDir;
     try {
+      // 1. Prepare (resize) every photo first, so the total size is known.
+      final safeId = _surveyId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+      uploadDir = Directory(
+        '${(await getTemporaryDirectory()).path}/upload_$safeId',
+      );
+      await uploadDir.create(recursive: true);
+
+      final prepared = <String, File>{};
+      for (var n = 0; n < pending.length; n++) {
+        await _waitIfPaused();
+        final p = pending[n];
+        final file = await SurveyService.prepareForUpload(
+          File(p.point.photos[p.index].path),
+          '${uploadDir.path}/photo_$n.jpg',
+        );
+        prepared[p.key] = file;
+        final size = await file.length();
+        if (mounted) setState(() => _bytesTotal += size);
+      }
+      if (mounted) setState(() => _preparingPhotos = false);
+
+      // 2. Upload them one by one; Pause waits between photos.
+      for (final p in pending) {
+        await _waitIfPaused();
+        final file = prepared[p.key]!;
+        _uploadedPhotoPaths[p.key] = await SurveyService.uploadPhoto(
+          surveyId: _surveyId,
+          pointNumber: p.point.number,
+          preparedFile: file,
+          photoIndex: p.index + 1,
+        );
+        final size = await file.length();
+        if (mounted) {
+          setState(() {
+            _photosUploaded++;
+            _bytesUploaded += size;
+          });
+        }
+      }
+
       final pointDocuments = <Map<String, dynamic>>[];
 
       for (final point in _points) {
-        final uploadedPhotos = <Map<String, dynamic>>[];
-        for (var i = 0; i < point.photos.length; i++) {
-          final photo = point.photos[i];
-          final storagePath = await SurveyService.uploadPhoto(
-            surveyId: _surveyId,
-            pointNumber: point.number,
-            photoFile: File(photo.path),
-            photoIndex: i + 1,
-          );
-          uploadedPhotos.add({
-            'storage_path': storagePath,
-            'photo_number': i + 1,
-          });
-          if (mounted) setState(() => _photosUploaded++);
-        }
+        final uploadedPhotos = <Map<String, dynamic>>[
+          for (var i = 0; i < point.photos.length; i++)
+            {
+              'storage_path':
+                  _uploadedPhotoPaths['${point.number}_${i}_${point.photos[i].path}'],
+              'photo_number': i + 1,
+            },
+        ];
 
         pointDocuments.add({
           'point_number': point.number,
@@ -835,7 +921,18 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _isSavingSurvey = false);
+      try {
+        await uploadDir?.delete(recursive: true);
+      } catch (_) {
+        // Temp files; the OS clears them eventually.
+      }
+      if (mounted) {
+        setState(() {
+          _isSavingSurvey = false;
+          _preparingPhotos = false;
+          _resumeGate = null;
+        });
+      }
     }
   }
 
@@ -1358,13 +1455,43 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
 
                   children: [
-                    Text(
-                      _photosUploaded < _photosTotal
-                          ? 'Uploading photo ${_photosUploaded + 1} of $_photosTotal…'
-                          : 'Saving survey…',
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _uploadPaused
+                                ? 'Paused · $_photosUploaded of $_photosTotal photos sent'
+                                : _preparingPhotos
+                                ? 'Preparing photos…'
+                                : _photosUploaded < _photosTotal
+                                ? 'Uploading photo ${_photosUploaded + 1} of $_photosTotal…'
+                                : 'Saving survey…',
 
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+
+                        if (_photosUploaded < _photosTotal)
+                          TextButton.icon(
+                            onPressed: _togglePause,
+                            icon: Icon(
+                              _uploadPaused
+                                  ? Icons.play_arrow_rounded
+                                  : Icons.pause_rounded,
+                            ),
+                            label: Text(_uploadPaused ? 'Resume' : 'Pause'),
+                          ),
+                      ],
                     ),
+
+                    if (_bytesTotal > 0)
+                      Text(
+                        _preparingPhotos
+                            ? 'Total size so far: ${_formatMb(_bytesTotal)}'
+                            : '${_formatMb(_bytesUploaded)} of ${_formatMb(_bytesTotal)}',
+
+                        style: TextStyle(color: colors.onSurfaceVariant),
+                      ),
 
                     const SizedBox(height: 6),
 
@@ -1374,9 +1501,9 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
                       child: LinearProgressIndicator(
                         minHeight: 6,
 
-                        value: _photosTotal == 0
+                        value: (_preparingPhotos || _bytesTotal == 0)
                             ? null
-                            : _photosUploaded / _photosTotal,
+                            : _bytesUploaded / _bytesTotal,
                       ),
                     ),
                   ],

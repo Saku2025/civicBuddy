@@ -7,6 +7,7 @@ import 'presentation/home_screen.dart';
 import 'presentation/login_screen.dart';
 import 'presentation/update_dialog.dart';
 import 'services/theme_service.dart';
+import 'services/update_notifier.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +20,13 @@ Future<void> main() async {
   );
 
   await ThemeService.init();
+
+  // Background check for new releases (phone notification when found).
+  try {
+    await UpdateNotifier.start();
+  } catch (_) {
+    // Never block app start on this.
+  }
 
   runApp(const CivicBuddyApp());
 }
@@ -109,7 +117,11 @@ class _AuthGateState extends State<AuthGate> {
     // Check for a newer release once per launch, signed in or not, so users
     // who cannot sign in still get fixes.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) checkForAppUpdate(context);
+      if (!mounted) return;
+      // Ask once for notification permission (Android 13+), then check.
+      UpdateNotifier.requestPermission().whenComplete(() {
+        if (mounted) checkForAppUpdate(context);
+      });
     });
   }
 
