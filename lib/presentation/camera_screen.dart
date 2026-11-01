@@ -29,6 +29,10 @@ class _CameraScreenState extends State<CameraScreen>
   double _maxZoom = 1;
   double _zoom = 1;
   double _zoomAtPinchStart = 1;
+
+  // Flash: chosen mode, and whether the options menu is open.
+  FlashMode _flashMode = FlashMode.off;
+  bool _flashMenuOpen = false;
   bool _isPinching = false;
 
   @override
@@ -94,6 +98,9 @@ class _CameraScreenState extends State<CameraScreen>
       });
 
       _loadZoomRange(newController);
+
+      // Keep the chosen flash mode if the camera was restarted.
+      if (_flashMode != FlashMode.off) _applyFlash(_flashMode);
     } catch (e) {
       await newController?.dispose();
 
@@ -141,7 +148,11 @@ class _CameraScreenState extends State<CameraScreen>
       setState(() {
         capturedImage = image;
         isTakingPicture = false;
+        _flashMenuOpen = false;
       });
+
+      // No need for the torch while looking at the photo.
+      if (_flashMode == FlashMode.torch) _applyFlash(FlashMode.off);
     } catch (e) {
       if (!mounted) return;
 
@@ -226,6 +237,49 @@ class _CameraScreenState extends State<CameraScreen>
     setState(() {
       capturedImage = null;
     });
+
+    if (_flashMode == FlashMode.torch) _applyFlash(FlashMode.torch);
+  }
+
+  // ------------------------------------------------------------
+  // Flash
+  // ------------------------------------------------------------
+
+  static const List<({FlashMode mode, IconData icon, String label})>
+  _flashOptions = [
+    (mode: FlashMode.auto, icon: Icons.flash_auto, label: 'Auto'),
+    (mode: FlashMode.always, icon: Icons.flash_on, label: 'Flash on capture'),
+    (mode: FlashMode.torch, icon: Icons.flashlight_on, label: 'Always on'),
+    (mode: FlashMode.off, icon: Icons.flash_off, label: 'Off'),
+  ];
+
+  IconData get _flashIcon =>
+      _flashOptions.firstWhere((o) => o.mode == _flashMode).icon;
+
+  /// Sets the camera's flash without changing the chosen mode. Returns false
+  /// if this camera has no flash.
+  Future<bool> _applyFlash(FlashMode mode) async {
+    final camera = controller;
+    if (camera == null || !camera.value.isInitialized) return false;
+
+    try {
+      await camera.setFlashMode(mode);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _selectFlashMode(FlashMode mode) async {
+    setState(() => _flashMenuOpen = false);
+
+    if (await _applyFlash(mode)) {
+      if (mounted) setState(() => _flashMode = mode);
+    } else if (mounted && mode != FlashMode.off) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This camera has no flash.')),
+      );
+    }
   }
 
   void useImage() {
@@ -321,6 +375,10 @@ class _CameraScreenState extends State<CameraScreen>
               : controller != null && controller!.value.isInitialized
               ? GestureDetector(
                   behavior: HitTestBehavior.opaque,
+                  // Tapping the preview closes the flash menu.
+                  onTap: () {
+                    if (_flashMenuOpen) setState(() => _flashMenuOpen = false);
+                  },
                   onScaleStart: (_) => _zoomAtPinchStart = _zoom,
                   onScaleUpdate: (details) {
                     // Two fingers only, so a single tap or drag never zooms.
@@ -360,8 +418,40 @@ class _CameraScreenState extends State<CameraScreen>
                   ),
                 ),
               ),
-              const SizedBox(width: 48),
+              if (controller != null && controller!.value.isInitialized)
+                _circleButton(
+                  icon: _flashMenuOpen ? Icons.close : _flashIcon,
+                  // Yellow while a flash mode is on, like phone cameras.
+                  color: _flashMode == FlashMode.off || _flashMenuOpen
+                      ? Colors.white
+                      : const Color(0xFFFFD54F),
+                  tooltip: 'Flash',
+                  onPressed: () =>
+                      setState(() => _flashMenuOpen = !_flashMenuOpen),
+                )
+              else
+                const SizedBox(width: 48),
             ],
+          ),
+        ),
+
+        // Flash options, opened from the flash button.
+        Positioned(
+          top: 66,
+          right: 10,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                alignment: Alignment.topRight,
+                scale: animation,
+                child: child,
+              ),
+            ),
+            child: _flashMenuOpen
+                ? _flashMenu()
+                : const SizedBox.shrink(key: ValueKey('closed')),
           ),
         ),
 
@@ -583,6 +673,8 @@ class _CameraScreenState extends State<CameraScreen>
   Widget _circleButton({
     required IconData icon,
     required VoidCallback onPressed,
+    Color color = Colors.white,
+    String? tooltip,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -590,8 +682,57 @@ class _CameraScreenState extends State<CameraScreen>
         shape: BoxShape.circle,
       ),
       child: IconButton(
+        tooltip: tooltip,
         onPressed: onPressed,
-        icon: Icon(icon, color: Colors.white),
+        icon: Icon(icon, color: color),
+      ),
+    );
+  }
+
+  /// Auto / Flash on capture / Always on / Off. The chosen one is yellow.
+  Widget _flashMenu() {
+    return Container(
+      key: const ValueKey('open'),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final option in _flashOptions)
+            InkWell(
+              onTap: () => _selectFlashMode(option.mode),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 10, 14, 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      option.label,
+                      style: TextStyle(
+                        color: option.mode == _flashMode
+                            ? const Color(0xFFFFD54F)
+                            : Colors.white,
+                        fontWeight: option.mode == _flashMode
+                            ? FontWeight.bold
+                            : FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(
+                      option.icon,
+                      color: option.mode == _flashMode
+                          ? const Color(0xFFFFD54F)
+                          : Colors.white,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
