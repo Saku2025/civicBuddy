@@ -1,18 +1,18 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../services/auth_service.dart';
 import '../services/draft_service.dart';
 import '../services/location_service.dart';
-import '../services/survey_service.dart';
+import '../services/survey_uploader.dart';
+import '../services/upload_queue.dart';
 
 import 'camera_screen.dart';
 import 'location_prompt.dart';
+import 'upload_progress_view.dart';
 
 class StartSurveyScreen extends StatefulWidget {
   const StartSurveyScreen({super.key, this.draft});
@@ -247,45 +247,18 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
 
   bool _isSavingSurvey = false;
 
-  // Submit progress, shown under the survey while uploading.
-  int _photosUploaded = 0;
+  // Checking for internet before offering Submit / Save to queue.
+  bool _checkingNetwork = false;
 
-  int _photosTotal = 0;
-
-  // Upload size in bytes, known once the photos are prepared (compressed).
-  bool _preparingPhotos = false;
-
-  int _bytesUploaded = 0;
-
-  int _bytesTotal = 0;
-
-  // Pause takes effect between photos; null while not paused.
-  Completer<void>? _resumeGate;
-
-  bool get _uploadPaused => _resumeGate != null;
+  // Submit progress (photo count, MB, Pause/Resume) while uploading.
+  SurveyUploader? _uploader;
 
   // Photos already uploaded in this session, so a retry after a failed
-  // submit skips them. Key: point, index and local file.
+  // submit skips them.
   final Map<String, String> _uploadedPhotoPaths = {};
 
-  void _togglePause() {
-    setState(() {
-      if (_resumeGate == null) {
-        _resumeGate = Completer<void>();
-      } else {
-        _resumeGate!.complete();
-        _resumeGate = null;
-      }
-    });
-  }
-
-  Future<void> _waitIfPaused() async {
-    final gate = _resumeGate;
-    if (gate != null) await gate.future;
-  }
-
-  static String _formatMb(int bytes) =>
-      '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  // Ended by saving to the upload queue instead of submitting.
+  bool _queued = false;
 
   /// Points or interviews that would be lost by leaving the screen.
   bool get _hasUnsavedWork =>
@@ -756,152 +729,161 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
       if (_interviews.isEmpty) return;
     }
 
-    final confirmed = await showDialog<bool>(
+    setState(() => _checkingNetwork = true);
+    final network = await UploadQueue.checkNetwork();
+    if (!mounted) return;
+    setState(() => _checkingNetwork = false);
+
+    // No internet: keep the finished survey in the upload queue.
+    if (network == NetworkStatus.offline) {
+      if (await _saveToQueue() && mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.cloud_off_outlined),
+            title: const Text('No internet connection'),
+            content: const Text(
+              'The survey is saved in the Upload queue on this phone. It '
+              'uploads automatically when you are on Wi-Fi, or you can '
+              'upload it from Upload queue on the home screen.',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Submit survey?'),
         content: Text(
-          'Submit ${_points.length} point(s), ${_interviews.length} citizen '
-          'interview(s) and all questionnaire answers to Supabase?',
+          '${_points.length} point(s), '
+          '${_points.fold<int>(0, (sum, p) => sum + p.photos.length)} '
+          'photo(s) and ${_interviews.length} citizen interview(s).\n\n'
+          'You are on ${network == NetworkStatus.wifi ? 'Wi-Fi' : 'mobile data'}. '
+          'Submit now on this network, or save it to the Upload queue to '
+          'upload automatically on Wi-Fi?',
         ),
+        actionsOverflowButtonSpacing: 4,
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Continue editing'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Submit Survey'),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.pop(ctx, 'queue'),
+            icon: const Icon(Icons.schedule_send_outlined),
+            label: const Text('Save to queue'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(ctx, 'submit'),
+            icon: const Icon(Icons.cloud_upload_outlined),
+            label: const Text('Submit now'),
           ),
         ],
       ),
     );
 
-    if (confirmed != true || !mounted) return;
+    if (!mounted) return;
+    if (choice == 'queue') {
+      await _saveToQueue();
+    } else if (choice == 'submit') {
+      await _submitNow();
+    }
+  }
 
-    final pending = <({_SurveyPoint point, int index, String key})>[
+  /// The finished survey in the format [SurveyUploader] uploads and the
+  /// upload queue stores.
+  Map<String, dynamic> _buildSubmission() => {
+    'survey_id': _surveyId,
+    'started_at': _startedAt.toIso8601String(),
+    'ended_at': DateTime.now().toIso8601String(),
+    'points': [
       for (final point in _points)
-        for (var i = 0; i < point.photos.length; i++)
-          (
-            point: point,
-            index: i,
-            key: '${point.number}_${i}_${point.photos[i].path}',
-          ),
-    ].where((p) => !_uploadedPhotoPaths.containsKey(p.key)).toList();
-
-    setState(() {
-      _isSavingSurvey = true;
-      _preparingPhotos = true;
-      _photosUploaded = 0;
-      _photosTotal = pending.length;
-      _bytesUploaded = 0;
-      _bytesTotal = 0;
-      _resumeGate = null;
-    });
-
-    Directory? uploadDir;
-    try {
-      // 1. Prepare (resize) every photo first, so the total size is known.
-      final safeId = _surveyId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
-      uploadDir = Directory(
-        '${(await getTemporaryDirectory()).path}/upload_$safeId',
-      );
-      await uploadDir.create(recursive: true);
-
-      final prepared = <String, File>{};
-      for (var n = 0; n < pending.length; n++) {
-        await _waitIfPaused();
-        final p = pending[n];
-        final file = await SurveyService.prepareForUpload(
-          File(p.point.photos[p.index].path),
-          '${uploadDir.path}/photo_$n.jpg',
-        );
-        prepared[p.key] = file;
-        final size = await file.length();
-        if (mounted) setState(() => _bytesTotal += size);
-      }
-      if (mounted) setState(() => _preparingPhotos = false);
-
-      // 2. Upload them one by one; Pause waits between photos.
-      for (final p in pending) {
-        await _waitIfPaused();
-        final file = prepared[p.key]!;
-        _uploadedPhotoPaths[p.key] = await SurveyService.uploadPhoto(
-          surveyId: _surveyId,
-          pointNumber: p.point.number,
-          preparedFile: file,
-          photoIndex: p.index + 1,
-        );
-        final size = await file.length();
-        if (mounted) {
-          setState(() {
-            _photosUploaded++;
-            _bytesUploaded += size;
-          });
-        }
-      }
-
-      final pointDocuments = <Map<String, dynamic>>[];
-
-      for (final point in _points) {
-        final uploadedPhotos = <Map<String, dynamic>>[
-          for (var i = 0; i < point.photos.length; i++)
-            {
-              'storage_path':
-                  _uploadedPhotoPaths['${point.number}_${i}_${point.photos[i].path}'],
-              'photo_number': i + 1,
-            },
-        ];
-
-        pointDocuments.add({
+        {
           'point_number': point.number,
           'latitude': point.latitude,
           'longitude': point.longitude,
           'area': point.area,
           'captured_at': point.capturedAt.toUtc().toIso8601String(),
-          'photos': uploadedPhotos,
+          'photo_paths': [for (final photo in point.photos) photo.path],
           'surveyor_answers': {
             for (var i = 0; i < _surveyorQuestions.length; i++)
               _surveyorQuestions[i]['question'] as String: point.answers[i],
           },
-        });
-      }
-
-      final citizenDocuments = <Map<String, dynamic>>[
-        for (var n = 0; n < _interviews.length; n++)
-          {
-            'interview_number': n + 1,
-            'occupation': _interviews[n].occupation,
-            'gender': _interviews[n].gender,
-            'age': _interviews[n].age,
-            'latitude': _interviews[n].latitude,
-            'longitude': _interviews[n].longitude,
-            'area': _interviews[n].area,
-            'location_captured_at': _interviews[n].locationCapturedAt
-                .toUtc()
-                .toIso8601String(),
-            'answers': {
-              for (var i = 0; i < _citizenQuestions.length; i++)
-                _citizenQuestions[i]['question'] as String:
-                    _interviews[n].answers[i],
-            },
-          },
-      ];
-
-      await SurveyService.saveSurvey(
-        surveyId: _surveyId,
-        startedAt: _startedAt,
-        endedAt: DateTime.now(),
-        surveyData: {
-          'points': pointDocuments,
-          'citizens': citizenDocuments,
-          // Single-interview field read by app versions up to 1.7.4.
-          'citizen': citizenDocuments.first,
         },
-      );
+    ],
+    'citizens': [
+      for (var n = 0; n < _interviews.length; n++)
+        {
+          'interview_number': n + 1,
+          'occupation': _interviews[n].occupation,
+          'gender': _interviews[n].gender,
+          'age': _interviews[n].age,
+          'latitude': _interviews[n].latitude,
+          'longitude': _interviews[n].longitude,
+          'area': _interviews[n].area,
+          'location_captured_at': _interviews[n].locationCapturedAt
+              .toUtc()
+              .toIso8601String(),
+          'answers': {
+            for (var i = 0; i < _citizenQuestions.length; i++)
+              _citizenQuestions[i]['question'] as String:
+                  _interviews[n].answers[i],
+          },
+        },
+    ],
+  };
 
-      // Submitted: the draft (and its photo copies) is no longer needed.
-      await DraftService.delete(_surveyId);
+  /// Ends the survey by putting it in the upload queue. Returns whether it
+  /// was saved.
+  Future<bool> _saveToQueue() async {
+    try {
+      await UploadQueue.add(_buildSubmission());
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save to the upload queue: $e')),
+        );
+      }
+      return false;
+    }
+
+    if (!mounted) return true;
+    setState(() {
+      _surveyEnded = true;
+      _queued = true;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Saved to the Upload queue. It uploads automatically on Wi-Fi.',
+        ),
+      ),
+    );
+    return true;
+  }
+
+  Future<void> _submitNow() async {
+    final uploader = SurveyUploader(
+      _buildSubmission(),
+      alreadyUploaded: _uploadedPhotoPaths,
+    );
+
+    setState(() {
+      _isSavingSurvey = true;
+      _uploader = uploader;
+    });
+
+    try {
+      await uploader.run();
 
       if (!mounted) return;
       setState(() => _surveyEnded = true);
@@ -917,20 +899,18 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
           content: Text(
             'Survey submission failed: ${e.toString().replaceFirst('Exception: ', '')}',
           ),
-          duration: const Duration(seconds: 6),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(
+            label: 'Save to queue',
+            onPressed: _saveToQueue,
+          ),
         ),
       );
     } finally {
-      try {
-        await uploadDir?.delete(recursive: true);
-      } catch (_) {
-        // Temp files; the OS clears them eventually.
-      }
       if (mounted) {
         setState(() {
           _isSavingSurvey = false;
-          _preparingPhotos = false;
-          _resumeGate = null;
+          _uploader = null;
         });
       }
     }
@@ -1447,67 +1427,10 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
             ),
 
             // Upload progress while submitting.
-            if (_isSavingSurvey)
+            if (_uploader case final uploader?)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _uploadPaused
-                                ? 'Paused · $_photosUploaded of $_photosTotal photos sent'
-                                : _preparingPhotos
-                                ? 'Preparing photos…'
-                                : _photosUploaded < _photosTotal
-                                ? 'Uploading photo ${_photosUploaded + 1} of $_photosTotal…'
-                                : 'Saving survey…',
-
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-
-                        if (_photosUploaded < _photosTotal)
-                          TextButton.icon(
-                            onPressed: _togglePause,
-                            icon: Icon(
-                              _uploadPaused
-                                  ? Icons.play_arrow_rounded
-                                  : Icons.pause_rounded,
-                            ),
-                            label: Text(_uploadPaused ? 'Resume' : 'Pause'),
-                          ),
-                      ],
-                    ),
-
-                    if (_bytesTotal > 0)
-                      Text(
-                        _preparingPhotos
-                            ? 'Total size so far: ${_formatMb(_bytesTotal)}'
-                            : '${_formatMb(_bytesUploaded)} of ${_formatMb(_bytesTotal)}',
-
-                        style: TextStyle(color: colors.onSurfaceVariant),
-                      ),
-
-                    const SizedBox(height: 6),
-
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-
-                      child: LinearProgressIndicator(
-                        minHeight: 6,
-
-                        value: (_preparingPhotos || _bytesTotal == 0)
-                            ? null
-                            : _bytesUploaded / _bytesTotal,
-                      ),
-                    ),
-                  ],
-                ),
+                child: UploadProgressView(uploader: uploader),
               ),
 
             Padding(
@@ -1519,19 +1442,26 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
                 height: 50,
 
                 child: FilledButton.icon(
-                  onPressed: (_surveyEnded || _isSavingSurvey)
+                  onPressed:
+                      (_surveyEnded || _isSavingSurvey || _checkingNetwork)
                       ? null
                       : _endSurvey,
 
                   icon: Icon(
-                    _surveyEnded
+                    _queued
+                        ? Icons.schedule_send_outlined
+                        : _surveyEnded
                         ? Icons.check_circle_outline
                         : Icons.stop_circle_outlined,
                   ),
 
                   label: Text(
-                    _surveyEnded
+                    _queued
+                        ? 'Saved to Upload Queue'
+                        : _surveyEnded
                         ? 'Survey Completed'
+                        : _checkingNetwork
+                        ? 'Checking connection…'
                         : _isSavingSurvey
                         ? 'Submitting…'
                         : 'Complete & End Survey',

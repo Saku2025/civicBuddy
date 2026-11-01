@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/draft_service.dart';
 import '../services/theme_service.dart';
+import '../services/upload_queue.dart';
 import 'about_screen.dart';
 import 'drafts_screen.dart';
 import 'start_survey_screen.dart';
+import 'upload_queue_screen.dart';
 import 'previous_surveys_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -22,12 +24,23 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _photoUrl;
   // Unfinished surveys saved on this phone.
   int _draftCount = 0;
+  // Finished surveys waiting to be uploaded.
+  int _queueCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadUserDetails();
     _loadDraftCount();
+    UploadQueue.changes.addListener(_loadDraftCount);
+    // Upload queued surveys now and whenever Wi-Fi connects.
+    UploadQueue.startAutoUpload();
+  }
+
+  @override
+  void dispose() {
+    UploadQueue.changes.removeListener(_loadDraftCount);
+    super.dispose();
   }
 
   Future<void> _loadDraftCount() async {
@@ -35,7 +48,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (userId == null) return;
 
     final drafts = await DraftService.list(userId);
-    if (mounted) setState(() => _draftCount = drafts.length);
+    final queued = await UploadQueue.list();
+    if (mounted) {
+      setState(() {
+        _draftCount = drafts.length;
+        _queueCount = queued.length;
+      });
+    }
   }
 
   void _loadUserDetails() {
@@ -278,6 +297,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? 'Unfinished surveys are saved here'
                     : 'Continue or delete unfinished surveys',
                 onTap: () => _openScreen(const DraftsScreen()),
+              ),
+              const SizedBox(height: 16),
+              _SurveyActionCard(
+                icon: Icons.cloud_upload_outlined,
+                title: _queueCount == 0
+                    ? 'Upload queue'
+                    : 'Upload queue ($_queueCount)',
+                subtitle: _queueCount == 0
+                    ? 'Finished surveys waiting for internet'
+                    : 'Waiting to upload · automatic on Wi-Fi',
+                onTap: () => _openScreen(const UploadQueueScreen()),
               ),
               const SizedBox(height: 16),
               _SurveyActionCard(

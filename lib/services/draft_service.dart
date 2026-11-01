@@ -80,8 +80,12 @@ class DraftService {
     });
   }
 
-  /// The signed-in user's drafts, most recently edited first.
-  static Future<List<Map<String, dynamic>>> list(String userId) {
+  /// The signed-in user's drafts, most recently edited first. With
+  /// [queued], the finished surveys in the upload queue instead.
+  static Future<List<Map<String, dynamic>>> list(
+    String userId, {
+    bool queued = false,
+  }) {
     return _serialized(() async {
       final root = await _root();
       if (!await root.exists()) return <Map<String, dynamic>>[];
@@ -96,7 +100,9 @@ class DraftService {
 
         try {
           final data = jsonDecode(await file.readAsString());
-          if (data is Map<String, dynamic> && data['user_id'] == userId) {
+          if (data is Map<String, dynamic> &&
+              data['user_id'] == userId &&
+              (data['queued'] == true) == queued) {
             drafts.add(data);
           }
         } catch (_) {
