@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import '../services/draft_service.dart';
 import '../services/theme_service.dart';
 import 'about_screen.dart';
+import 'drafts_screen.dart';
 import 'start_survey_screen.dart';
 import 'previous_surveys_screen.dart';
 
@@ -18,11 +20,22 @@ class _HomeScreenState extends State<HomeScreen> {
   String _userEmail = '';
   // Google profile picture, if the account has one.
   String? _photoUrl;
+  // Unfinished surveys saved on this phone.
+  int _draftCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadUserDetails();
+    _loadDraftCount();
+  }
+
+  Future<void> _loadDraftCount() async {
+    final userId = AuthService.getCurrentUser()?.id;
+    if (userId == null) return;
+
+    final drafts = await DraftService.list(userId);
+    if (mounted) setState(() => _draftCount = drafts.length);
   }
 
   void _loadUserDetails() {
@@ -208,8 +221,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _openScreen(Widget screen) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  Future<void> _openScreen(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    // A survey may have been saved to, resumed from or removed from Drafts.
+    _loadDraftCount();
   }
 
   @override
@@ -254,6 +269,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: 'Start Survey',
                 subtitle: 'Create a new survey',
                 onTap: () => _openScreen(const StartSurveyScreen()),
+              ),
+              const SizedBox(height: 16),
+              _SurveyActionCard(
+                icon: Icons.edit_note,
+                title: _draftCount == 0 ? 'Drafts' : 'Drafts ($_draftCount)',
+                subtitle: _draftCount == 0
+                    ? 'Unfinished surveys are saved here'
+                    : 'Continue or delete unfinished surveys',
+                onTap: () => _openScreen(const DraftsScreen()),
               ),
               const SizedBox(height: 16),
               _SurveyActionCard(

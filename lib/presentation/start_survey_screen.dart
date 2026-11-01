@@ -4,6 +4,8 @@ import 'package:camera/camera.dart';
 
 import 'package:flutter/material.dart';
 
+import '../services/auth_service.dart';
+import '../services/draft_service.dart';
 import '../services/location_service.dart';
 import '../services/survey_service.dart';
 
@@ -11,7 +13,11 @@ import 'camera_screen.dart';
 import 'location_prompt.dart';
 
 class StartSurveyScreen extends StatefulWidget {
-  const StartSurveyScreen({super.key});
+  const StartSurveyScreen({super.key, this.draft});
+
+  /// A saved draft (from [DraftService]) to continue, or null for a new
+  /// survey.
+  final Map<String, dynamic>? draft;
 
   @override
   State<StartSurveyScreen> createState() {
@@ -54,7 +60,42 @@ class CitizenInterviewResult {
 
     required this.locationCapturedAt,
   });
+
+  // Draft (local) format; answers keys are question indexes.
+  Map<String, dynamic> toDraftJson() => {
+    'occupation': occupation,
+    'gender': gender,
+    'age': age,
+    'answers': {
+      for (final entry in answers.entries) '${entry.key}': entry.value,
+    },
+    'latitude': latitude,
+    'longitude': longitude,
+    'area': area,
+    'location_captured_at': locationCapturedAt.toIso8601String(),
+  };
+
+  factory CitizenInterviewResult.fromDraftJson(Map<String, dynamic> json) =>
+      CitizenInterviewResult(
+        occupation: json['occupation']?.toString() ?? '',
+        gender: json['gender']?.toString() ?? '',
+        age: (json['age'] as num?)?.toInt() ?? 0,
+        answers: _answersFromJson(json['answers']),
+        latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+        longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+        area: json['area']?.toString() ?? '',
+        locationCapturedAt:
+            DateTime.tryParse(json['location_captured_at']?.toString() ?? '') ??
+            DateTime.now(),
+      );
 }
+
+Map<int, String> _answersFromJson(Object? json) => {
+  if (json is Map)
+    for (final entry in json.entries)
+      if (int.tryParse('${entry.key}') != null)
+        int.parse('${entry.key}'): '${entry.value}',
+};
 
 class _SurveyPoint {
   _SurveyPoint({
@@ -82,6 +123,44 @@ class _SurveyPoint {
   final List<XFile> photos = [];
 
   final Map<int, String> answers = {};
+
+  // Draft (local) format.
+  Map<String, dynamic> toDraftJson() => {
+    'number': number,
+    'captured_at': capturedAt.toIso8601String(),
+    'latitude': latitude,
+    'longitude': longitude,
+    'area': area,
+    'photos': [for (final photo in photos) photo.path],
+    'answers': {
+      for (final entry in answers.entries) '${entry.key}': entry.value,
+    },
+  };
+
+  /// Photos whose files no longer exist on the phone are dropped.
+  factory _SurveyPoint.fromDraftJson(Map<String, dynamic> json) {
+    final point = _SurveyPoint(
+      number: (json['number'] as num?)?.toInt() ?? 1,
+      capturedAt:
+          DateTime.tryParse(json['captured_at']?.toString() ?? '') ??
+          DateTime.now(),
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+      area: json['area']?.toString() ?? '',
+    );
+
+    final photos = json['photos'];
+    if (photos is List) {
+      for (final path in photos) {
+        if (path is String && File(path).existsSync()) {
+          point.photos.add(XFile(path));
+        }
+      }
+    }
+
+    point.answers.addAll(_answersFromJson(json['answers']));
+    return point;
+  }
 }
 
 class _StartSurveyScreenState extends State<StartSurveyScreen> {
@@ -94,9 +173,73 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
   // Citizen interviews in the order they were taken.
   final List<CitizenInterviewResult> _interviews = [];
 
-  late final DateTime _startedAt = DateTime.now();
+  // A resumed draft keeps its original ID and start time.
+  late final DateTime _startedAt =
+      DateTime.tryParse(widget.draft?['started_at']?.toString() ?? '') ??
+      DateTime.now();
 
-  late final String _surveyId = 'SUR-${_startedAt.microsecondsSinceEpoch}';
+  late final String _surveyId =
+      widget.draft?['survey_id']?.toString() ??
+      'SUR-${_startedAt.microsecondsSinceEpoch}';
+
+  @override
+  void initState() {
+    super.initState();
+
+    final draft = widget.draft;
+    if (draft == null) return;
+
+    final points = draft['points'];
+    if (points is List) {
+      _points.addAll(
+        points.whereType<Map>().map(
+          (p) => _SurveyPoint.fromDraftJson(Map<String, dynamic>.from(p)),
+        ),
+      );
+    }
+
+    final interviews = draft['interviews'];
+    if (interviews is List) {
+      _interviews.addAll(
+        interviews.whereType<Map>().map(
+          (i) => CitizenInterviewResult.fromDraftJson(
+            Map<String, dynamic>.from(i),
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Saves the survey as a draft on the phone after every change, so it
+  /// survives Back, closing the app or the app being killed. An empty
+  /// survey removes its draft.
+  Future<void> _saveDraft() async {
+    if (_surveyEnded) return;
+
+    final userId = AuthService.getCurrentUser()?.id;
+    if (userId == null) return;
+
+    try {
+      if (_points.isEmpty && _interviews.isEmpty) {
+        await DraftService.delete(_surveyId);
+        return;
+      }
+
+      await DraftService.save(_surveyId, {
+        'version': 1,
+        'user_id': userId,
+        'survey_id': _surveyId,
+        'started_at': _startedAt.toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+        'points': [for (final point in _points) point.toDraftJson()],
+        'interviews': [
+          for (final interview in _interviews) interview.toDraftJson(),
+        ],
+      });
+    } catch (_) {
+      // A failed draft save must never block the survey itself.
+    }
+  }
 
   bool _isAddingPoint = false;
 
@@ -262,6 +405,8 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
           ),
         );
       });
+
+      await _saveDraft();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -296,7 +441,18 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
 
     if (!mounted || image == null) return;
 
-    setState(() => point.photos.add(image));
+    // Keep the photo with the draft: the camera's cache file can be cleared.
+    var photo = image;
+    try {
+      photo = XFile(await DraftService.storePhoto(_surveyId, image.path));
+    } catch (_) {
+      // Fall back to the camera's file; the photo is still usable now.
+    }
+
+    if (!mounted) return;
+
+    setState(() => point.photos.add(photo));
+    await _saveDraft();
   }
 
   Future<void> _removePoint(_SurveyPoint point) async {
@@ -337,6 +493,11 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
         _points[i].number = i + 1;
       }
     });
+
+    for (final photo in point.photos) {
+      await DraftService.deletePhoto(photo.path);
+    }
+    await _saveDraft();
   }
 
   Future<void> _showSurveyorQuestionnaire(_SurveyPoint point) async {
@@ -363,6 +524,8 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
         ..clear()
         ..addAll(result);
     });
+
+    await _saveDraft();
   }
 
   /// Adds a new interview, or edits the one at [index].
@@ -407,6 +570,8 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
         _interviews[index] = result;
       }
     });
+
+    await _saveDraft();
   }
 
   Future<void> _removeInterview(int index) async {
@@ -441,6 +606,8 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _interviews.removeAt(index));
+
+    await _saveDraft();
   }
 
   Future<void> _endSurvey() async {
@@ -581,6 +748,9 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
         },
       );
 
+      // Submitted: the draft (and its photo copies) is no longer needed.
+      await DraftService.delete(_surveyId);
+
       if (!mounted) return;
       setState(() => _surveyEnded = true);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -603,53 +773,36 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
     }
   }
 
-  /// Back button / gesture while the survey has unsaved work.
-  Future<void> _confirmLeave() async {
-    if (_isSavingSurvey) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please wait until the survey finishes uploading.'),
-        ),
-      );
-      return;
-    }
-
-    final discard = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Discard this survey?'),
-        content: Text(
-          'You have ${_points.length} point(s) and ${_interviews.length} '
-          'interview(s) that are not submitted yet. Leaving now deletes them.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep editing'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Discard'),
-          ),
-        ],
-      ),
-    );
-
-    if (discard == true && mounted) Navigator.pop(context);
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return PopScope(
-      canPop: !_hasUnsavedWork && !_isSavingSurvey,
+      // Leaving is fine (the draft is saved after every change), except
+      // while uploading.
+      canPop: !_isSavingSurvey,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _confirmLeave();
+        final messenger = ScaffoldMessenger.of(context);
+
+        if (!didPop) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Please wait until the survey finishes uploading.'),
+            ),
+          );
+          return;
+        }
+
+        if (_hasUnsavedWork) {
+          _saveDraft();
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Survey saved to Drafts. Open Drafts to continue it.',
+              ),
+            ),
+          );
+        }
       },
       child: _buildSurvey(context, colors),
     );
