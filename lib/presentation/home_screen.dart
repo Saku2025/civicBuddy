@@ -302,8 +302,8 @@ class _HomeScreenState extends State<HomeScreen> {
               _SurveyActionCard(
                 icon: Icons.cloud_upload_outlined,
                 title: _queueCount == 0
-                    ? 'Upload queue'
-                    : 'Upload queue ($_queueCount)',
+                    ? 'Upload from Queue'
+                    : 'Upload from Queue ($_queueCount)',
                 subtitle: _queueCount == 0
                     ? 'Finished surveys waiting for internet'
                     : 'Waiting to upload · automatic on Wi-Fi',
@@ -312,7 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 16),
               _SurveyActionCard(
                 icon: Icons.history,
-                title: 'Previous Surveys',
+                title: 'Previous Survey',
                 subtitle: 'View your saved survey history',
                 onTap: () => _openScreen(const PreviousSurveysScreen()),
               ),
