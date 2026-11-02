@@ -45,6 +45,9 @@ class CitizenInterviewResult {
 
   final DateTime locationCapturedAt;
 
+  // GPS accuracy in metres (null for interviews saved by older versions).
+  final double? accuracy;
+
   const CitizenInterviewResult({
     required this.occupation,
 
@@ -61,6 +64,8 @@ class CitizenInterviewResult {
     required this.area,
 
     required this.locationCapturedAt,
+
+    this.accuracy,
   });
 
   // Draft (local) format; answers keys are question indexes.
@@ -75,6 +80,7 @@ class CitizenInterviewResult {
     'longitude': longitude,
     'area': area,
     'location_captured_at': locationCapturedAt.toIso8601String(),
+    'accuracy_m': accuracy,
   };
 
   factory CitizenInterviewResult.fromDraftJson(Map<String, dynamic> json) =>
@@ -89,6 +95,7 @@ class CitizenInterviewResult {
         locationCapturedAt:
             DateTime.tryParse(json['location_captured_at']?.toString() ?? '') ??
             DateTime.now(),
+        accuracy: (json['accuracy_m'] as num?)?.toDouble(),
       );
 }
 
@@ -110,6 +117,8 @@ class _SurveyPoint {
     required this.longitude,
 
     required this.area,
+
+    this.accuracy,
   });
 
   int number;
@@ -122,6 +131,9 @@ class _SurveyPoint {
 
   final String area;
 
+  // GPS accuracy in metres (null for points saved by older versions).
+  final double? accuracy;
+
   final List<XFile> photos = [];
 
   final Map<int, String> answers = {};
@@ -133,6 +145,7 @@ class _SurveyPoint {
     'latitude': latitude,
     'longitude': longitude,
     'area': area,
+    'accuracy_m': accuracy,
     'photos': [for (final photo in photos) photo.path],
     'answers': {
       for (final entry in answers.entries) '${entry.key}': entry.value,
@@ -149,6 +162,7 @@ class _SurveyPoint {
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
       area: json['area']?.toString() ?? '',
+      accuracy: (json['accuracy_m'] as num?)?.toDouble(),
     );
 
     final photos = json['photos'];
@@ -244,6 +258,9 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
   }
 
   bool _isAddingPoint = false;
+
+  // Accuracy (metres) of the best GPS fix while adding a point.
+  double? _locatingAccuracy;
 
   bool _isSavingSurvey = false;
 
@@ -384,13 +401,20 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
   Future<void> _addPoint() async {
     if (_isAddingPoint || _surveyEnded) return;
 
-    setState(() => _isAddingPoint = true);
+    setState(() {
+      _isAddingPoint = true;
+      _locatingAccuracy = null;
+    });
 
     try {
       // Asks to turn on GPS / allow location instead of failing.
       if (!await ensureLocationReady(context)) return;
 
-      final position = await _locationService.getCurrentLocation();
+      final position = await _locationService.getCurrentLocation(
+        onAccuracy: (meters) {
+          if (mounted) setState(() => _locatingAccuracy = meters);
+        },
+      );
 
       final area = await _locationService.getAreaName(
         latitude: position.latitude,
@@ -412,6 +436,8 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
             longitude: position.longitude,
 
             area: area,
+
+            accuracy: position.accuracy,
           ),
         );
       });
@@ -813,6 +839,7 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
           'longitude': point.longitude,
           'area': point.area,
           'captured_at': point.capturedAt.toUtc().toIso8601String(),
+          'accuracy_m': point.accuracy,
           'photo_paths': [for (final photo in point.photos) photo.path],
           'surveyor_answers': {
             for (var i = 0; i < _surveyorQuestions.length; i++)
@@ -833,6 +860,7 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
           'location_captured_at': _interviews[n].locationCapturedAt
               .toUtc()
               .toIso8601String(),
+          'accuracy_m': _interviews[n].accuracy,
           'answers': {
             for (var i = 0; i < _citizenQuestions.length; i++)
               _citizenQuestions[i]['question'] as String:
@@ -1047,7 +1075,13 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
                                 )
                               : const Icon(Icons.add_location_alt_outlined),
 
-                          label: const Text('Add Point'),
+                          label: Text(
+                            !_isAddingPoint
+                                ? 'Add Point'
+                                : _locatingAccuracy == null
+                                ? 'Locating…'
+                                : 'GPS ±${_locatingAccuracy!.round()} m…',
+                          ),
                         ),
                     ],
                   ),
@@ -1141,6 +1175,11 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
                             ),
 
                             Text('Area: ${point.area}'),
+
+                            if (point.accuracy != null)
+                              Text(
+                                'GPS accuracy: ±${point.accuracy!.round()} m',
+                              ),
 
                             Text(
                               'Latitude: ${point.latitude.toStringAsFixed(6)}',
@@ -1545,6 +1584,12 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
 
   DateTime? _locationCapturedAt;
 
+  // GPS accuracy (metres) of the captured location, and of the best fix
+  // while locating.
+  double? _accuracy;
+
+  double? _locatingAccuracy;
+
   bool _isLocating = false;
 
   String? _locationError;
@@ -1562,6 +1607,7 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
       _longitude = existing.longitude;
       _area = existing.area;
       _locationCapturedAt = existing.locationCapturedAt;
+      _accuracy = existing.accuracy;
     } else if (widget.showDemographics) {
       // setState is not allowed during initState, so start after the first
       // frame; show the spinner until then.
@@ -1576,6 +1622,7 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
     setState(() {
       _isLocating = true;
       _locationError = null;
+      _locatingAccuracy = null;
     });
 
     try {
@@ -1589,7 +1636,11 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
         return;
       }
 
-      final position = await _locationService.getCurrentLocation();
+      final position = await _locationService.getCurrentLocation(
+        onAccuracy: (meters) {
+          if (mounted) setState(() => _locatingAccuracy = meters);
+        },
+      );
 
       final area = await _locationService.getAreaName(
         latitude: position.latitude,
@@ -1599,6 +1650,7 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
       if (!mounted) return;
 
       setState(() {
+        _accuracy = position.accuracy;
         _latitude = position.latitude;
         _longitude = position.longitude;
         _area = area;
@@ -1689,6 +1741,8 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
           area: _area ?? 'Unknown Area',
 
           locationCapturedAt: _locationCapturedAt ?? DateTime.now(),
+
+          accuracy: _accuracy,
         ),
       );
 
@@ -1712,9 +1766,9 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
     final Widget content;
 
     if (_isLocating) {
-      content = const Row(
+      content = Row(
         children: [
-          SizedBox(
+          const SizedBox(
             width: 16,
 
             height: 16,
@@ -1722,9 +1776,15 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
 
-          SizedBox(width: 10),
+          const SizedBox(width: 10),
 
-          Text('Getting current location…'),
+          Expanded(
+            child: Text(
+              _locatingAccuracy == null
+                  ? 'Getting exact GPS location…'
+                  : 'Getting exact GPS location… ±${_locatingAccuracy!.round()} m',
+            ),
+          ),
         ],
       );
     } else if (_latitude != null && _longitude != null) {
@@ -1743,6 +1803,13 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
 
             style: TextStyle(color: colors.onSurfaceVariant),
           ),
+
+          if (_accuracy != null)
+            Text(
+              'GPS accuracy: ±${_accuracy!.round()} m',
+
+              style: TextStyle(color: colors.onSurfaceVariant),
+            ),
         ],
       );
     } else {

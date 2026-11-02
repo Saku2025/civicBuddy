@@ -15,6 +15,7 @@ const MethodChannel _locationSettings = MethodChannel(
 /// 1. Permission not decided: "Allow CivicBuddy to access this device's
 ///    location?" (Android shows this only until the user has answered).
 /// 2. GPS off: Google Play services' "Turn on location?" (one tap).
+/// 3. Only approximate location allowed: "Change to precise location?".
 ///
 /// Only when a native popup cannot be used (permission blocked for good, or
 /// no Google Play services) does it explain and offer "Open settings".
@@ -51,11 +52,42 @@ Future<bool> ensureLocationReady(BuildContext context) async {
     return false;
   }
 
-  if (await Geolocator.isLocationServiceEnabled()) return true;
+  if (!await Geolocator.isLocationServiceEnabled()) {
+    if (!context.mounted) return false;
+    if (!await _turnOnLocation(context)) return false;
+  }
 
   if (!context.mounted) return false;
+  return _ensurePrecise(context);
+}
 
-  return _turnOnLocation(context);
+/// Android 12+ lets the user allow only "Approximate" location, which is
+/// shifted by up to ~2 km. Ask Android to upgrade to "Precise" (its own
+/// popup), or explain how in Settings.
+Future<bool> _ensurePrecise(BuildContext context) async {
+  if (await Geolocator.getLocationAccuracy() !=
+      LocationAccuracyStatus.reduced) {
+    return true;
+  }
+
+  // Asking again shows Android's "Change to precise location?" popup.
+  await Geolocator.requestPermission();
+  if (await Geolocator.getLocationAccuracy() !=
+      LocationAccuracyStatus.reduced) {
+    return true;
+  }
+
+  if (!context.mounted) return false;
+  await _explainAndOpenSettings(
+    context,
+    title: 'Turn on precise location',
+    message:
+        'CivicBuddy only has approximate location, which can be up to 2 km '
+        'off. In Settings, open Permissions > Location and turn on "Use '
+        'precise location".',
+    openSettings: Geolocator.openAppSettings,
+  );
+  return false;
 }
 
 Future<bool> _turnOnLocation(BuildContext context) async {
