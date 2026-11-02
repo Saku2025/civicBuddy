@@ -944,19 +944,79 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
     }
   }
 
+  /// Back with unsaved work: keep the survey in Drafts, delete it, or stay.
+  Future<void> _confirmLeave() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final colors = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+          icon: Icon(Icons.edit_note, size: 36, color: colors.primary),
+          title: const Text('Leave this survey?'),
+          content: Text(
+            '${_points.length} point(s) and ${_interviews.length} '
+            'interview(s) recorded.\n\n'
+            'Save it to Drafts to continue later, or cancel the survey to '
+            'delete it and its photos from this phone.',
+          ),
+          actionsOverflowButtonSpacing: 4,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Keep editing'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: colors.error),
+              onPressed: () => Navigator.pop(ctx, 'cancel'),
+              child: const Text('Cancel survey'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(ctx, 'draft'),
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save to Drafts'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || choice == null) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    if (choice == 'draft') {
+      await _saveDraft();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Survey saved to Drafts. Open Drafts to continue it.'),
+        ),
+      );
+    } else {
+      // Stop further draft saves, then remove the draft and its photos.
+      _surveyEnded = true;
+      await DraftService.delete(_surveyId);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Survey cancelled and deleted.')),
+      );
+    }
+
+    // Navigator.pop leaves even though PopScope blocks the Back gesture.
+    navigator.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return PopScope(
-      // Leaving is fine (the draft is saved after every change), except
-      // while uploading.
-      canPop: !_isSavingSurvey,
+      // Back asks first when there is unsaved work; blocked while uploading.
+      canPop: !_isSavingSurvey && !_hasUnsavedWork,
       onPopInvokedWithResult: (didPop, _) {
-        final messenger = ScaffoldMessenger.of(context);
+        if (didPop) return;
 
-        if (!didPop) {
-          messenger.showSnackBar(
+        if (_isSavingSurvey) {
+          ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Please wait until the survey finishes uploading.'),
             ),
@@ -964,16 +1024,7 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
           return;
         }
 
-        if (_hasUnsavedWork) {
-          _saveDraft();
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Survey saved to Drafts. Open Drafts to continue it.',
-              ),
-            ),
-          );
-        }
+        _confirmLeave();
       },
       child: _buildSurvey(context, colors),
     );
