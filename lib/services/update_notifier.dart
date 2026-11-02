@@ -60,13 +60,9 @@ class UpdateNotifier {
             channelDescription: _channel.description,
             importance: Importance.high,
             priority: Priority.high,
-            // White hard hat (status bar) tinted green, with the full-colour
-            // logo as the picture.
+            // The mascot icon (left), tinted CivicBuddy green; no picture.
             icon: 'ic_notification',
             color: const Color(0xFF256D3F),
-            largeIcon: const DrawableResourceAndroidBitmap(
-              'notification_logo',
-            ),
           ),
         ),
       );
