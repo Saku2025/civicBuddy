@@ -68,6 +68,19 @@ class CitizenInterviewResult {
     this.accuracy,
   });
 
+  /// The same interview with a looked-up area name.
+  CitizenInterviewResult withArea(String area) => CitizenInterviewResult(
+    occupation: occupation,
+    gender: gender,
+    age: age,
+    answers: answers,
+    latitude: latitude,
+    longitude: longitude,
+    area: area,
+    locationCapturedAt: locationCapturedAt,
+    accuracy: accuracy,
+  );
+
   // Draft (local) format; answers keys are question indexes.
   Map<String, dynamic> toDraftJson() => {
     'occupation': occupation,
@@ -129,7 +142,8 @@ class _SurveyPoint {
 
   final double longitude;
 
-  final String area;
+  // "Unknown Area" when recorded offline; Refresh looks it up again.
+  String area;
 
   // GPS accuracy in metres (null for points saved by older versions).
   final double? accuracy;
@@ -258,6 +272,67 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
   }
 
   bool _isAddingPoint = false;
+
+  // Points / interviews whose area name is being looked up.
+  final Set<Object> _refreshingArea = {};
+
+  /// Looks up the area name again from the saved latitude/longitude, e.g.
+  /// for a point or interview recorded offline. [apply] stores the result.
+  Future<void> _refreshArea(
+    Object item, {
+    required double latitude,
+    required double longitude,
+    required void Function(String area) apply,
+  }) async {
+    if (_refreshingArea.contains(item)) return;
+    setState(() => _refreshingArea.add(item));
+
+    final area = await _locationService.getAreaName(
+      latitude: latitude,
+      longitude: longitude,
+    );
+
+    if (!mounted) return;
+    final found = area != unknownArea;
+    setState(() {
+      _refreshingArea.remove(item);
+      if (found) apply(area);
+    });
+
+    if (found) {
+      await _saveDraft();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not find the area name. Check your internet connection '
+            'and try again.',
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Refresh button (or spinner) for an area name.
+  Widget _areaRefreshButton(Object item, String area, VoidCallback onPressed) {
+    if (_refreshingArea.contains(item)) {
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    final colors = Theme.of(context).colorScheme;
+    return IconButton(
+      tooltip: 'Find area name',
+      color: area == unknownArea ? colors.error : colors.primary,
+      onPressed: onPressed,
+      icon: const Icon(Icons.refresh),
+    );
+  }
 
   // Accuracy (metres) of the best GPS fix while adding a point.
   double? _locatingAccuracy;
@@ -1225,7 +1300,30 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
                               ],
                             ),
 
-                            Text('Area: ${point.area}'),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Area: ${point.area}',
+                                    style: point.area == unknownArea
+                                        ? TextStyle(color: colors.error)
+                                        : null,
+                                  ),
+                                ),
+
+                                if (!_surveyEnded)
+                                  _areaRefreshButton(
+                                    point,
+                                    point.area,
+                                    () => _refreshArea(
+                                      point,
+                                      latitude: point.latitude,
+                                      longitude: point.longitude,
+                                      apply: (area) => point.area = area,
+                                    ),
+                                  ),
+                              ],
+                            ),
 
                             if (point.accuracy != null)
                               Text(
@@ -1487,12 +1585,38 @@ class _StartSurveyScreenState extends State<StartSurveyScreen> {
 
                         trailing: _surveyEnded
                             ? null
-                            : IconButton(
-                                tooltip: 'Remove interview',
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _areaRefreshButton(
+                                    _interviews[i],
+                                    _interviews[i].area,
+                                    () {
+                                      final interview = _interviews[i];
+                                      _refreshArea(
+                                        interview,
+                                        latitude: interview.latitude,
+                                        longitude: interview.longitude,
+                                        apply: (area) {
+                                          final at = _interviews.indexOf(
+                                            interview,
+                                          );
+                                          if (at != -1) {
+                                            _interviews[at] = interview
+                                                .withArea(area);
+                                          }
+                                        },
+                                      );
+                                    },
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Remove interview',
 
-                                onPressed: () => _removeInterview(i),
+                                    onPressed: () => _removeInterview(i),
 
-                                icon: const Icon(Icons.delete_outline),
+                                    icon: const Icon(Icons.delete_outline),
+                                  ),
+                                ],
                               ),
 
                         onTap: _surveyEnded
@@ -1789,7 +1913,7 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
 
           longitude: _longitude!,
 
-          area: _area ?? 'Unknown Area',
+          area: _area ?? unknownArea,
 
           locationCapturedAt: _locationCapturedAt ?? DateTime.now(),
 
@@ -1844,7 +1968,7 @@ class _QuestionnaireScreenState extends State<_QuestionnaireScreen> {
 
         children: [
           Text(
-            _area ?? 'Unknown Area',
+            _area ?? unknownArea,
 
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),

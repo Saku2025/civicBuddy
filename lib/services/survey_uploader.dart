@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'draft_service.dart';
+import 'location_service.dart';
 import 'survey_service.dart';
 
 /// Uploads one finished survey: its photos first (resized up front, so the
@@ -72,6 +73,27 @@ class SurveyUploader extends ChangeNotifier {
   static String _key(Map<String, dynamic> point, int index, String path) =>
       '${point['point_number']}_${index}_$path';
 
+  /// Replaces "Unknown Area" from the saved latitude/longitude where
+  /// possible; leaves it if the lookup still fails.
+  static Future<void> _fillUnknownAreas(
+    List<Map<String, dynamic>> items,
+  ) async {
+    final locationService = LocationService();
+    for (final item in items) {
+      final latitude = (item['latitude'] as num?)?.toDouble();
+      final longitude = (item['longitude'] as num?)?.toDouble();
+      if (item['area'] != unknownArea ||
+          latitude == null ||
+          longitude == null) {
+        continue;
+      }
+      item['area'] = await locationService.getAreaName(
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
+  }
+
   /// Uploads everything, then removes the survey's local copy (draft or
   /// queue entry). Throws on failure; calling again resumes.
   Future<void> run() async {
@@ -134,6 +156,9 @@ class SurveyUploader extends ChangeNotifier {
         bytesDone += await prepared[n].length();
         notifyListeners();
       }
+
+      // Areas recorded offline: look them up now that there is internet.
+      await _fillUnknownAreas([...points, ...citizens]);
 
       // 3. The survey row, pointing at the uploaded photos.
       final pointDocuments = [

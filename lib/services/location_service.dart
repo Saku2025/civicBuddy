@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
+/// Area name used when it cannot be looked up (e.g. no internet).
+const String unknownArea = 'Unknown Area';
+
 class LocationService {
   /// Gets the user's current GPS position.
   ///
@@ -132,7 +135,7 @@ class LocationService {
       final placemarks = await placemarkFromCoordinates(latitude, longitude);
 
       if (placemarks.isEmpty) {
-        return 'Unknown Area';
+        return unknownArea;
       }
 
       final place = placemarks.first;
@@ -154,9 +157,9 @@ class LocationService {
         return place.administrativeArea!.trim();
       }
 
-      return 'Unknown Area';
+      return unknownArea;
     } catch (_) {
-      return 'Unknown Area';
+      return unknownArea;
     }
   }
 }
