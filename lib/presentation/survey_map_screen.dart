@@ -40,7 +40,7 @@ class _MapItem {
     required this.date,
     required this.accuracy,
     required this.cleanliness,
-    required this.firstPhotoPath,
+    required this.photoPaths,
     required this.details,
   });
 
@@ -64,7 +64,8 @@ class _MapItem {
   // "Very Clean" / "Mildly Dirty" / "Very Dirty", or null.
   final String? cleanliness;
 
-  final String? firstPhotoPath;
+  // Every photo of the point (empty for interviews).
+  final List<String> photoPaths;
 
   // Interview: "Occupation · Gender · Age".
   final String? details;
@@ -248,9 +249,11 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
             date: DateTime.tryParse(point['captured_at']?.toString() ?? ''),
             accuracy: _number(point['accuracy_m']),
             cleanliness: _cleanlinessOf(point),
-            firstPhotoPath: photos.isEmpty
-                ? null
-                : photos.first['storage_path']?.toString(),
+            photoPaths: [
+              for (final photo in photos)
+                if ((photo['storage_path']?.toString() ?? '').isNotEmpty)
+                  photo['storage_path'].toString(),
+            ],
             details: null,
           ),
         );
@@ -279,7 +282,7 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
             ),
             accuracy: _number(citizen['accuracy_m']),
             cleanliness: null,
-            firstPhotoPath: null,
+            photoPaths: const [],
             details: [
               citizen['occupation'],
               citizen['gender'],
@@ -615,9 +618,13 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
                 ],
               ),
             ),
-            if (item.firstPhotoPath != null) ...[
+            if (item.photoPaths.isNotEmpty) ...[
               const SizedBox(width: 10),
-              _FirstPhoto(path: item.firstPhotoPath!, size: 72),
+              _PhotoCarousel(
+                // A new point starts again at its first photo.
+                key: ObjectKey(item),
+                paths: item.photoPaths,
+              ),
             ],
           ],
         ),
@@ -1165,52 +1172,133 @@ class _PulsingMarker extends StatelessWidget {
   }
 }
 
-/// First photo of a point, loaded through a short-lived signed URL.
-class _FirstPhoto extends StatelessWidget {
-  const _FirstPhoto({required this.path, this.size = 110});
+/// All photos of a point: swipe left/right, with a dot per photo below.
+class _PhotoCarousel extends StatefulWidget {
+  const _PhotoCarousel({super.key, required this.paths});
 
-  final String path;
+  final List<String> paths;
 
-  final double size;
+  static const double size = 104;
+
+  @override
+  State<_PhotoCarousel> createState() => _PhotoCarouselState();
+}
+
+class _PhotoCarouselState extends State<_PhotoCarousel> {
+  final PageController _pages = PageController();
+
+  int _page = 0;
+
+  // One request signs every photo of the point.
+  late final Future<Map<String, String>> _urls = _loadUrls();
+
+  Future<Map<String, String>> _loadUrls() async {
+    final results = await Supabase.instance.client.storage
+        .from(SurveyService.photoBucket)
+        .createSignedUrlsResult(widget.paths.toSet().toList(), 3600);
+    return {
+      for (final result in results)
+        if (result case SignedUrlSuccess(:final path, :final signedUrl))
+          path: signedUrl,
+    };
+  }
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: FutureBuilder<String>(
-          future: Supabase.instance.client.storage
-              .from(SurveyService.photoBucket)
-              .createSignedUrl(path, 3600),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return ColoredBox(
-                color: colors.surfaceContainerHighest,
-                child: const Icon(Icons.broken_image_outlined),
-              );
-            }
-            if (!snapshot.hasData) {
-              return ColoredBox(
-                color: colors.surfaceContainerHighest,
-                child: const Center(
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              );
-            }
-            return Image.network(
-              snapshot.data!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => ColoredBox(
-                color: colors.surfaceContainerHighest,
-                child: const Icon(Icons.broken_image_outlined),
-              ),
-            );
-          },
+    final count = widget.paths.length;
+
+    Widget placeholder(Widget child) =>
+        ColoredBox(color: colors.surfaceContainerHighest, child: child);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: _PhotoCarousel.size,
+            height: _PhotoCarousel.size,
+            child: FutureBuilder<Map<String, String>>(
+              future: _urls,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return placeholder(const Icon(Icons.broken_image_outlined));
+                }
+                if (!snapshot.hasData) {
+                  return placeholder(
+                    const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
+                }
+                final urls = snapshot.data!;
+                return PageView.builder(
+                  controller: _pages,
+                  itemCount: count,
+                  onPageChanged: (page) => setState(() => _page = page),
+                  itemBuilder: (context, i) {
+                    final url = urls[widget.paths[i]];
+                    if (url == null) {
+                      return placeholder(
+                        const Icon(Icons.broken_image_outlined),
+                      );
+                    }
+                    return Image.network(
+                      url,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, progress) =>
+                          progress == null
+                          ? child
+                          : placeholder(
+                              const Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                      errorBuilder: (_, _, _) =>
+                          placeholder(const Icon(Icons.broken_image_outlined)),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
         ),
-      ),
+        if (count > 1) ...[
+          const SizedBox(height: 6),
+          // One dot per photo; the current one is wider and coloured.
+          SizedBox(
+            width: _PhotoCarousel.size,
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                for (var i = 0; i < count; i++)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: i == _page ? 14 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: i == _page
+                          ? colors.primary
+                          : colors.onSurfaceVariant.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
