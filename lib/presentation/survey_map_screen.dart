@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart' hide Path;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -143,6 +146,9 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
 
   late final String? _myUserId = AuthService.getCurrentUser()?.id;
 
+  // The point / interview whose glass bubble is open.
+  _MapItem? _selected;
+
   @override
   void initState() {
     super.initState();
@@ -158,6 +164,7 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
 
   Future<void> _load() async {
     setState(() {
+      _selected = null;
       _loading = true;
       _offline = false;
       _error = null;
@@ -482,7 +489,10 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
   }
 
   void _changeFilters(VoidCallback change) {
-    setState(change);
+    setState(() {
+      change();
+      _selected = null;
+    });
     // A survey that no longer matches the date / who filter is cleared.
     if (_surveyFilter != null &&
         !_surveys.any((s) => s['id'] == _surveyFilter && _surveyMatches(s))) {
@@ -503,123 +513,137 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
         '${two(d.hour)}:${two(d.minute)}';
   }
 
+  /// Opens the glass bubble above [item], moving the map so it fits.
   void _showItem(_MapItem item) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        final colors = Theme.of(sheetContext).colorScheme;
-        final isPoint = item.kind == _Kind.point;
-        final mine = item.survey['user_id'] == _myUserId;
+    setState(() => _selected = item);
+    // Put the point below the centre, leaving room for the bubble above.
+    _mapController.move(
+      item.position,
+      math.max(_mapController.camera.zoom, 15),
+      offset: const Offset(0, 120),
+    );
+  }
 
-        Widget line(IconData icon, String text) => Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 18, color: colors.onSurfaceVariant),
-              const SizedBox(width: 8),
-              Expanded(child: Text(text)),
-            ],
-          ),
-        );
+  /// Everything about a point / interview, shown inside the glass bubble.
+  Widget _bubbleContent(_MapItem item) {
+    final colors = Theme.of(context).colorScheme;
+    final isPoint = item.kind == _Kind.point;
 
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    _MarkerShape(
-                      color: _colorOf(item),
-                      isInterview: !isPoint,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        isPoint
-                            ? 'Point ${item.number}'
-                            : 'Citizen interview ${item.number}',
-                        style: Theme.of(sheetContext).textTheme.titleLarge
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    if (mine)
-                      Chip(
-                        label: const Text('Yours'),
-                        visualDensity: VisualDensity.compact,
-                        backgroundColor: colors.primaryContainer,
-                        side: BorderSide.none,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          line(Icons.tag, item.surveyId),
-                          line(
-                            Icons.person_outline,
-                            'By ${_surveyorName(item.survey['user_id'])}',
-                          ),
-                          line(
-                            Icons.place_outlined,
-                            item.area.isEmpty ? 'Unknown Area' : item.area,
-                          ),
-                          line(Icons.schedule, _dateText(item.date)),
-                          line(
-                            Icons.gps_fixed,
-                            item.accuracy == null
-                                ? 'GPS accuracy: not recorded'
-                                : 'GPS accuracy: ±${item.accuracy!.round()} m',
-                          ),
-                          if (item.cleanliness != null)
-                            line(
-                              Icons.cleaning_services_outlined,
-                              'Cleanliness: ${item.cleanliness}',
-                            ),
-                          if (item.details != null && item.details!.isNotEmpty)
-                            line(Icons.person_outline, item.details!),
-                        ],
-                      ),
-                    ),
-                    if (item.firstPhotoPath != null) ...[
-                      const SizedBox(width: 12),
-                      _FirstPhoto(path: item.firstPhotoPath!),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(sheetContext);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              SurveyDetailsScreen(survey: item.survey),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('Open survey'),
-                  ),
-                ),
-              ],
+    Widget line(IconData icon, String text) => Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: colors.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 12.5, color: colors.onSurface),
             ),
           ),
-        );
-      },
+        ],
+      ),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _MarkerShape(
+              color: _colorOf(item),
+              isInterview: !isPoint,
+              size: 16,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isPoint
+                    ? 'Point ${item.number}'
+                    : 'Citizen interview ${item.number}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  color: colors.onSurface,
+                ),
+              ),
+            ),
+            InkResponse(
+              onTap: () => setState(() => _selected = null),
+              radius: 18,
+              child: Icon(
+                Icons.close,
+                size: 18,
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  line(Icons.tag, item.surveyId),
+                  line(
+                    Icons.person_outline,
+                    'By ${_surveyorName(item.survey['user_id'])}',
+                  ),
+                  line(
+                    Icons.place_outlined,
+                    item.area.isEmpty ? 'Unknown Area' : item.area,
+                  ),
+                  line(Icons.schedule, _dateText(item.date)),
+                  line(
+                    Icons.gps_fixed,
+                    item.accuracy == null
+                        ? 'GPS accuracy: not recorded'
+                        : 'GPS accuracy: ±${item.accuracy!.round()} m',
+                  ),
+                  if (item.cleanliness != null)
+                    line(
+                      Icons.cleaning_services_outlined,
+                      'Cleanliness: ${item.cleanliness}',
+                    ),
+                  if (item.details != null && item.details!.isNotEmpty)
+                    line(Icons.badge_outlined, item.details!),
+                ],
+              ),
+            ),
+            if (item.firstPhotoPath != null) ...[
+              const SizedBox(width: 10),
+              _FirstPhoto(path: item.firstPhotoPath!, size: 72),
+            ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          height: 36,
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              padding: EdgeInsets.zero,
+              textStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SurveyDetailsScreen(survey: item.survey),
+              ),
+            ),
+            icon: const Icon(Icons.open_in_new, size: 16),
+            label: const Text('Open survey'),
+          ),
+        ),
+      ],
     );
   }
 
@@ -975,6 +999,9 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
             initialZoom: 12,
             minZoom: 3,
             maxZoom: 19,
+            onTap: (_, _) {
+              if (_selected != null) setState(() => _selected = null);
+            },
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
             ),
@@ -1025,6 +1052,11 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
                 ),
               ),
             ),
+            if (_selected case final item?)
+              _GlassBubbleLayer(
+                position: item.position,
+                child: _bubbleContent(item),
+              ),
             RichAttributionWidget(
               alignment: AttributionAlignment.bottomRight,
               attributions: [
@@ -1135,9 +1167,11 @@ class _PulsingMarker extends StatelessWidget {
 
 /// First photo of a point, loaded through a short-lived signed URL.
 class _FirstPhoto extends StatelessWidget {
-  const _FirstPhoto({required this.path});
+  const _FirstPhoto({required this.path, this.size = 110});
 
   final String path;
+
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -1145,8 +1179,8 @@ class _FirstPhoto extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: SizedBox(
-        width: 110,
-        height: 110,
+        width: size,
+        height: size,
         child: FutureBuilder<String>(
           future: Supabase.instance.client.storage
               .from(SurveyService.photoBucket)
@@ -1179,4 +1213,246 @@ class _FirstPhoto extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Places the glass bubble just above [position], following the map as it
+/// moves, with its tail pointing at the point.
+class _GlassBubbleLayer extends StatelessWidget {
+  const _GlassBubbleLayer({required this.position, required this.child});
+
+  final LatLng position;
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final camera = MapCamera.of(context);
+    final size = camera.nonRotatedSize;
+    final point = camera.latLngToScreenOffset(position);
+
+    // Hidden while the point is off screen.
+    if (point.dx < 0 ||
+        point.dy < 0 ||
+        point.dx > size.width ||
+        point.dy > size.height) {
+      return const SizedBox.shrink();
+    }
+
+    final width = math.min(300.0, size.width - 24);
+    final left = (point.dx - width / 2).clamp(12.0, size.width - width - 12);
+    final tailX = (point.dx - left).clamp(26.0, width - 26);
+
+    return SizedBox.fromSize(
+      size: size,
+      child: Stack(
+        children: [
+          Positioned(
+            left: left,
+            width: width,
+            // Just above the 18 px marker.
+            bottom: size.height - point.dy + 12,
+            // Taps on the bubble must not reach the map (which closes it).
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {},
+              child: _GlassBubble(tailX: tailX, child: child),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Liquid glass": the map behind is blurred, with a light translucent tint,
+/// a top sheen and a bright rim, shaped as a speech bubble.
+class _GlassBubble extends StatelessWidget {
+  const _GlassBubble({required this.tailX, required this.child});
+
+  static const double tail = 12;
+
+  final double tailX;
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final surface = Theme.of(context).colorScheme.surface;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.85, end: 1),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutBack,
+      // Pops out of the tail.
+      builder: (context, scale, content) => Transform.scale(
+        scale: scale,
+        alignment: Alignment.bottomCenter,
+        child: content,
+      ),
+      child: CustomPaint(
+        foregroundPainter: _GlassRimPainter(tailX: tailX, dark: dark),
+        child: ClipPath(
+          clipper: _BubbleClipper(tailX: tailX),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: CustomPaint(
+              painter: _GlassFillPainter(
+                tailX: tailX,
+                dark: dark,
+                surface: surface,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12 + tail),
+                child: child,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Path _bubblePath(Size size, double tailX) {
+  const radius = Radius.circular(22);
+  final body = Path()
+    ..addRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, size.width, size.height - _GlassBubble.tail),
+        radius,
+      ),
+    );
+  final tail = Path()
+    ..moveTo(tailX - 11, size.height - _GlassBubble.tail - 1)
+    ..quadraticBezierTo(tailX - 2, size.height - 4, tailX, size.height)
+    ..quadraticBezierTo(
+      tailX + 2,
+      size.height - 4,
+      tailX + 11,
+      size.height - _GlassBubble.tail - 1,
+    )
+    ..close();
+  return Path.combine(PathOperation.union, body, tail);
+}
+
+class _BubbleClipper extends CustomClipper<Path> {
+  const _BubbleClipper({required this.tailX});
+
+  final double tailX;
+
+  @override
+  Path getClip(Size size) => _bubblePath(size, tailX);
+
+  @override
+  bool shouldReclip(_BubbleClipper oldClipper) => oldClipper.tailX != tailX;
+}
+
+class _GlassFillPainter extends CustomPainter {
+  const _GlassFillPainter({
+    required this.tailX,
+    required this.dark,
+    required this.surface,
+  });
+
+  final double tailX;
+
+  final bool dark;
+
+  final Color surface;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = _bubblePath(size, tailX);
+    final rect = Offset.zero & size;
+
+    // Translucent tint, a little stronger at the top.
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            surface.withValues(alpha: dark ? 0.62 : 0.50),
+            surface.withValues(alpha: dark ? 0.44 : 0.28),
+          ],
+        ).createShader(rect),
+    );
+
+    // Liquid sheen across the top.
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: const Alignment(0.2, 0.1),
+          colors: [
+            Colors.white.withValues(alpha: dark ? 0.16 : 0.45),
+            Colors.white.withValues(alpha: 0),
+          ],
+        ).createShader(rect),
+    );
+
+    // Soft light spot, like light caught in glass.
+    final spot = Offset(size.width * 0.18, 6);
+    final spotRadius = size.width * 0.32;
+    canvas.drawCircle(
+      spot,
+      spotRadius,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            Colors.white.withValues(alpha: dark ? 0.10 : 0.30),
+            Colors.white.withValues(alpha: 0),
+          ],
+        ).createShader(Rect.fromCircle(center: spot, radius: spotRadius)),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_GlassFillPainter oldDelegate) =>
+      oldDelegate.tailX != tailX ||
+      oldDelegate.dark != dark ||
+      oldDelegate.surface != surface;
+}
+
+/// Bright rim (light from the top) with a faint dark outline for contrast.
+class _GlassRimPainter extends CustomPainter {
+  const _GlassRimPainter({required this.tailX, required this.dark});
+
+  final double tailX;
+
+  final bool dark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = _bubblePath(size, tailX);
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.4
+        ..color = Colors.black.withValues(alpha: dark ? 0.35 : 0.10),
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.white.withValues(alpha: dark ? 0.55 : 0.95),
+            Colors.white.withValues(alpha: dark ? 0.12 : 0.35),
+          ],
+        ).createShader(Offset.zero & size),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_GlassRimPainter oldDelegate) =>
+      oldDelegate.tailX != tailX || oldDelegate.dark != dark;
 }
