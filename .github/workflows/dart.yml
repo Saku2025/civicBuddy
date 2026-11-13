@@ -16,6 +16,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Same Flutter as local development. Newer releases deprecate
+          # package:flutter/material.dart, which fails `flutter analyze`.
+          # Update deliberately, after testing locally.
+          flutter-version: 3.47.0
           cache: true
 
       # pubspec.yaml bundles .env as an asset, and the real file is gitignored.
@@ -72,6 +76,10 @@ jobs:
         if: steps.version.outputs.exists == 'false'
         with:
           channel: stable
+          # Same Flutter as local development. Newer releases deprecate
+          # package:flutter/material.dart, which fails `flutter analyze`.
+          # Update deliberately, after testing locally.
+          flutter-version: 3.47.0
           cache: true
 
       - name: Write .env and signing key from secrets
