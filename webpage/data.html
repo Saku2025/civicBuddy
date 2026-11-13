@@ -53,7 +53,7 @@
       <!-- Signed out -->
       <div class="data-card" id="state-signed-out" hidden>
         <h2>Sign in to continue</h2>
-        <p>Sign in with your Google account (the same one you use in the CivicBuddy app) to see and download all surveys.</p>
+        <p>Sign in with the Google account you use in the CivicBuddy app. Surveyors who have submitted at least one survey can see and download all surveys.</p>
         <button class="btn btn-primary btn-google" id="sign-in" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3Z"/><path fill="#fff" opacity=".85" d="M12 22c2.7 0 5-.9 6.6-2.5l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="#fff" opacity=".7" d="M6.4 13.9a6 6 0 0 1 0-3.8V7.5H3.1a10 10 0 0 0 0 9l3.3-2.6Z"/><path fill="#fff" opacity=".85" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.5l3.3 2.6C7.2 7.8 9.4 6 12 6Z"/></svg>
           Sign in with Google
@@ -102,7 +102,10 @@
           </div>
         </div>
 
-        <p class="empty" id="no-surveys" hidden>No submitted surveys yet. Surveys appear here after they are submitted in the app.</p>
+        <div class="empty" id="no-surveys" hidden>
+          <h2>No survey data for this account</h2>
+          <p>Survey data is only available to CivicBuddy surveyors. Submit at least one survey in the app with this Google account, then come back. If you use a different Google account in the app, sign out and sign in with that one.</p>
+        </div>
       </div>
 
       <p class="message" id="message" role="status" hidden></p>
