@@ -7,6 +7,7 @@ import '../services/upload_queue.dart';
 import 'about_screen.dart';
 import 'drafts_screen.dart';
 import 'start_survey_screen.dart';
+import 'survey_map_screen.dart';
 import 'upload_queue_screen.dart';
 import 'previous_surveys_screen.dart';
 
@@ -308,6 +309,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? 'Finished surveys waiting for internet'
                     : 'Waiting to upload · automatic on Wi-Fi',
                 onTap: () => _openScreen(const UploadQueueScreen()),
+              ),
+              const SizedBox(height: 16),
+              _SurveyActionCard(
+                icon: Icons.map_outlined,
+                title: 'Survey Map',
+                subtitle: 'All surveyed points on a map',
+                onTap: () => _openScreen(const SurveyMapScreen()),
               ),
               const SizedBox(height: 16),
               _SurveyActionCard(

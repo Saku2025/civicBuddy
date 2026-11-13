@@ -104,6 +104,23 @@ class SurveyService {
     return List<Map<String, dynamic>>.from(rows);
   }
 
+  /// Every surveyor's surveys (for the map), newest first. Supabase's rules
+  /// return all surveys to surveyors who have submitted at least one, and
+  /// only their own to anyone else.
+  static Future<List<Map<String, dynamic>>> getAllSurveys() async {
+    if (_client.auth.currentUser == null) {
+      throw Exception('You must be signed in to view surveys.');
+    }
+    final rows = await _client
+        .from('surveys')
+        .select(
+          'id, user_id, survey_id, status, started_at, ended_at, created_at, '
+          'survey_data',
+        )
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
   /// Storage paths of every photo in a survey row from [getPreviousSurveys].
   static List<String> photoPathsOf(Map<String, dynamic> survey) {
     final data = survey['survey_data'];
