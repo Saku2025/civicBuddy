@@ -21,7 +21,7 @@ class SurveyMapScreen extends StatefulWidget {
 
 enum _Period { week, month, all }
 
-enum _ColorBy { cleanliness, survey, single }
+enum _ColorBy { surveyor, cleanliness, survey, single }
 
 enum _Kind { point, interview }
 
@@ -80,6 +80,19 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
   static const Color _unrated = Color(0xFF8A9A90);
   static const Color _interviewColor = Color(0xFF2F6FDB);
 
+  // "Color by surveyor": you are green, others get these in order.
+  static const Color _myColor = Color(0xFF2E9E50);
+  static const List<Color> _surveyorPalette = [
+    Color(0xFF2F6FDB), // blue
+    Color(0xFF8E44AD), // purple
+    Color(0xFFE67E22), // orange
+    Color(0xFFC2185B), // pink
+    Color(0xFF0097A7), // teal
+    Color(0xFF6D4C41), // brown
+    Color(0xFFD93B30), // red
+    Color(0xFF5C6BC0), // indigo
+  ];
+
   // Distinct colours for "Color by survey".
   static const List<Color> _surveyPalette = [
     Color(0xFF256D3F),
@@ -121,7 +134,7 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
   // and emails are not visible to the app).
   Map<String, String> _surveyorNames = {};
 
-  _ColorBy _colorBy = _ColorBy.cleanliness;
+  _ColorBy _colorBy = _ColorBy.surveyor;
 
   bool _showInterviews = true;
 
@@ -288,6 +301,14 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
     };
   }
 
+  /// Green for you; "Surveyor N" gets the N-th palette colour.
+  Color _surveyorColor(Object? userId) {
+    if (userId != null && userId == _myUserId) return _myColor;
+    final name = _surveyorNames[userId?.toString()] ?? '';
+    final n = int.tryParse(name.replaceFirst('Surveyor ', '')) ?? 1;
+    return _surveyorPalette[(n - 1) % _surveyorPalette.length];
+  }
+
   String _surveyorName(Object? userId) =>
       _surveyorNames[userId?.toString()] ?? 'Surveyor';
 
@@ -361,8 +382,16 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
               ),
               for (final t in totals)
                 ListTile(
-                  leading: Icon(
-                    t.userId == _myUserId ? Icons.person : Icons.person_outline,
+                  leading: CircleAvatar(
+                    radius: 14,
+                    backgroundColor: _surveyorColor(t.userId),
+                    child: Icon(
+                      t.userId == _myUserId
+                          ? Icons.person
+                          : Icons.person_outline,
+                      size: 16,
+                      color: Colors.white,
+                    ),
                   ),
                   title: Text(_surveyorName(t.userId)),
                   subtitle: Text(
@@ -412,10 +441,16 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
   ];
 
   Color _colorOf(_MapItem item) {
-    if (item.kind == _Kind.interview && _colorBy != _ColorBy.survey) {
+    // Interviews keep the surveyor's / survey's colour (square shape tells
+    // them apart); in the other modes they are blue.
+    if (item.kind == _Kind.interview &&
+        _colorBy != _ColorBy.survey &&
+        _colorBy != _ColorBy.surveyor) {
       return _interviewColor;
     }
     switch (_colorBy) {
+      case _ColorBy.surveyor:
+        return _surveyorColor(item.survey['user_id']);
       case _ColorBy.single:
         return Theme.of(context).colorScheme.primary;
       case _ColorBy.survey:
@@ -775,7 +810,24 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
               ),
             ),
             const SizedBox(height: 6),
-            if (_colorBy == _ColorBy.cleanliness) ...[
+            if (_colorBy == _ColorBy.surveyor) ...[
+              for (final userId
+                  in visible.map((i) => i.survey['user_id']).toSet().toList()
+                    ..sort(
+                      (a, b) => _surveyorName(a) == 'You'
+                          ? -1
+                          : _surveyorName(b) == 'You'
+                          ? 1
+                          : _surveyorName(a).compareTo(_surveyorName(b)),
+                    ))
+                row(_surveyorColor(userId), _surveyorName(userId)),
+              if (_showInterviews)
+                row(
+                  colors.onSurfaceVariant,
+                  'Square = citizen interview',
+                  interview: true,
+                ),
+            ] else if (_colorBy == _ColorBy.cleanliness) ...[
               row(_clean, 'Very clean'),
               row(_mild, 'Mildly dirty'),
               row(_dirty, 'Very dirty'),
@@ -784,7 +836,9 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
               row(_surveyPalette[0], 'One colour per survey')
             else
               row(colors.primary, 'Survey point'),
-            if (_showInterviews && _colorBy != _ColorBy.survey)
+            if (_showInterviews &&
+                _colorBy != _ColorBy.survey &&
+                _colorBy != _ColorBy.surveyor)
               row(_interviewColor, 'Citizen interview', interview: true),
             if (_showInterviews && _colorBy == _ColorBy.survey)
               row(_surveyPalette[0], 'Citizen interview', interview: true),
@@ -841,6 +895,10 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
             initialValue: _colorBy,
             onSelected: (v) => setState(() => _colorBy = v),
             itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: _ColorBy.surveyor,
+                child: Text('Color by surveyor'),
+              ),
               PopupMenuItem(
                 value: _ColorBy.cleanliness,
                 child: Text('Color by cleanliness'),
@@ -942,7 +1000,15 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
                 builder: (context, clustered) => Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: colors.primary,
+                    // The markers' colour if they all share one (e.g. all
+                    // from one surveyor), otherwise the app colour.
+                    color: () {
+                      final shades = {
+                        for (final m in clustered)
+                          if (byKey[m.key] case final item?) _colorOf(item),
+                      };
+                      return shades.length == 1 ? shades.first : colors.primary;
+                    }(),
                     border: Border.all(color: Colors.white, width: 3),
                     boxShadow: const [
                       BoxShadow(blurRadius: 6, color: Colors.black26),
@@ -951,8 +1017,8 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
                   alignment: Alignment.center,
                   child: Text(
                     '${clustered.length}',
-                    style: TextStyle(
-                      color: colors.onPrimary,
+                    style: const TextStyle(
+                      color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
