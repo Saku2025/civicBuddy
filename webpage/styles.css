@@ -781,6 +781,13 @@ main { padding: 0 clamp(16px, 4vw, 48px); }
 .footer p { margin: 0; }
 .footer .brand { color: var(--ink); font-size: 1rem; }
 .footer a:not(.brand) { font-weight: 600; color: var(--primary); text-decoration: none; }
+.footer .copyright {
+  flex-basis: 100%;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  text-align: center;
+  font-size: 0.85rem;
+}
 
 /* ---------- Scroll reveal ---------- */
 
