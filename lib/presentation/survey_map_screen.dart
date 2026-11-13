@@ -21,8 +21,6 @@ class SurveyMapScreen extends StatefulWidget {
 
 enum _Period { week, month, all }
 
-enum _Who { everyone, mine }
-
 enum _ColorBy { cleanliness, survey, single }
 
 enum _Kind { point, interview }
@@ -116,7 +114,12 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
 
   _Period _period = _Period.all;
 
-  _Who _who = _Who.everyone;
+  // Only this surveyor's surveys (user id), or null for everyone.
+  String? _userFilter;
+
+  // "You", "Surveyor 1", "Surveyor 2"… by user id (other surveyors' names
+  // and emails are not visible to the app).
+  Map<String, String> _surveyorNames = {};
 
   _ColorBy _colorBy = _ColorBy.cleanliness;
 
@@ -163,6 +166,7 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
       setState(() {
         _surveys = surveys;
         _items = _buildItems(surveys);
+        _surveyorNames = _nameSurveyors(surveys);
         _loading = false;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _fitToVisible());
@@ -268,23 +272,136 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
     return items;
   }
 
+  /// "You" for the signed-in user; other accounts numbered by how many
+  /// surveys they submitted (most first).
+  Map<String, String> _nameSurveyors(List<Map<String, dynamic>> surveys) {
+    final counts = <String, int>{};
+    for (final survey in surveys) {
+      final id = survey['user_id']?.toString() ?? '';
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+    final others = counts.keys.where((id) => id != _myUserId).toList()
+      ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
+    return {
+      if (_myUserId != null && counts.containsKey(_myUserId)) _myUserId: 'You',
+      for (final (i, id) in others.indexed) id: 'Surveyor ${i + 1}',
+    };
+  }
+
+  String _surveyorName(Object? userId) =>
+      _surveyorNames[userId?.toString()] ?? 'Surveyor';
+
+  /// Surveys, points and interviews per surveyor, for the date filter.
+  List<({String userId, int surveys, int points, int interviews})>
+  _surveyorTotals() {
+    final totals = <String, ({int surveys, int points, int interviews})>{};
+    for (final survey in _surveys) {
+      final userId = survey['user_id']?.toString() ?? '';
+      if (!_inPeriod(survey)) continue;
+
+      final items = _items.where((i) => identical(i.survey, survey));
+      final points = items.where((i) => i.kind == _Kind.point).length;
+      final current = totals[userId] ?? (surveys: 0, points: 0, interviews: 0);
+      totals[userId] = (
+        surveys: current.surveys + 1,
+        points: current.points + points,
+        interviews: current.interviews + items.length - points,
+      );
+    }
+    final list = [
+      for (final entry in totals.entries)
+        (
+          userId: entry.key,
+          surveys: entry.value.surveys,
+          points: entry.value.points,
+          interviews: entry.value.interviews,
+        ),
+    ];
+    // You first, then the others by number of surveys.
+    list.sort((a, b) {
+      if (a.userId == _myUserId) return -1;
+      if (b.userId == _myUserId) return 1;
+      return b.surveys.compareTo(a.surveys);
+    });
+    return list;
+  }
+
+  Future<void> _pickSurveyor() async {
+    final totals = _surveyorTotals();
+    final allSurveys = totals.fold<int>(0, (sum, t) => sum + t.surveys);
+
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.7,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text(
+                  'Surveyors',
+                  style: Theme.of(sheetContext).textTheme.titleLarge,
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.groups_outlined),
+                title: const Text('Everyone'),
+                subtitle: Text(
+                  '$allSurveys surveys from ${totals.length} '
+                  'surveyor${totals.length == 1 ? '' : 's'}',
+                ),
+                selected: _userFilter == null,
+                onTap: () => Navigator.pop(sheetContext, ''),
+              ),
+              for (final t in totals)
+                ListTile(
+                  leading: Icon(
+                    t.userId == _myUserId ? Icons.person : Icons.person_outline,
+                  ),
+                  title: Text(_surveyorName(t.userId)),
+                  subtitle: Text(
+                    '${t.surveys} survey${t.surveys == 1 ? '' : 's'} · '
+                    '${t.points} points · ${t.interviews} interviews',
+                  ),
+                  trailing: Text(
+                    '${t.surveys}',
+                    style: Theme.of(sheetContext).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  selected: _userFilter == t.userId,
+                  onTap: () => Navigator.pop(sheetContext, t.userId),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (picked == null) return;
+    _changeFilters(() => _userFilter = picked.isEmpty ? null : picked);
+  }
+
   DateTime? _surveyDate(Map<String, dynamic> survey) => DateTime.tryParse(
     (survey['ended_at'] ?? survey['created_at'])?.toString() ?? '',
   );
 
-  bool _surveyMatches(Map<String, dynamic> survey) {
-    if (_who == _Who.mine && survey['user_id'] != _myUserId) return false;
-
-    if (_period != _Period.all) {
-      final date = _surveyDate(survey);
-      final days = _period == _Period.week ? 7 : 30;
-      if (date == null ||
-          date.isBefore(DateTime.now().subtract(Duration(days: days)))) {
-        return false;
-      }
-    }
-    return true;
+  bool _inPeriod(Map<String, dynamic> survey) {
+    if (_period == _Period.all) return true;
+    final date = _surveyDate(survey);
+    final days = _period == _Period.week ? 7 : 30;
+    return date != null &&
+        !date.isBefore(DateTime.now().subtract(Duration(days: days)));
   }
+
+  bool _surveyMatches(Map<String, dynamic> survey) =>
+      (_userFilter == null || survey['user_id'] == _userFilter) &&
+      _inPeriod(survey);
 
   List<_MapItem> get _visibleItems => [
     for (final item in _items)
@@ -415,6 +532,10 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
                         children: [
                           line(Icons.tag, item.surveyId),
                           line(
+                            Icons.person_outline,
+                            'By ${_surveyorName(item.survey['user_id'])}',
+                          ),
+                          line(
                             Icons.place_outlined,
                             item.area.isEmpty ? 'Unknown Area' : item.area,
                           ),
@@ -503,7 +624,7 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
                   title: Text(survey['survey_id']?.toString() ?? 'Survey'),
                   subtitle: Text(
                     '${_dateText(_surveyDate(survey))}'
-                    '${survey['user_id'] == _myUserId ? ' · Yours' : ''}',
+                    ' · ${_surveyorName(survey['user_id'])}',
                   ),
                   selected: _surveyFilter == survey['id'],
                   onTap: () => Navigator.pop(sheetContext, survey['id']),
@@ -573,17 +694,27 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
               (v) => _changeFilters(() => _period = v),
             ),
             divider(),
-            choice(
+            choice<String?>(
               'Everyone',
-              _Who.everyone,
-              _who,
-              (v) => _changeFilters(() => _who = v),
+              null,
+              _userFilter,
+              (v) => _changeFilters(() => _userFilter = v),
             ),
-            choice(
+            choice<String?>(
               'Mine',
-              _Who.mine,
-              _who,
-              (v) => _changeFilters(() => _who = v),
+              _myUserId,
+              _userFilter,
+              (v) => _changeFilters(() => _userFilter = v),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.groups_outlined, size: 18),
+              label: Text(
+                _userFilter != null && _userFilter != _myUserId
+                    ? _surveyorName(_userFilter)
+                    : 'Surveyors (${_surveyorNames.length})',
+              ),
+              onPressed: _pickSurveyor,
+              visualDensity: VisualDensity.compact,
             ),
             divider(),
             ActionChip(
@@ -622,6 +753,7 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
     final points = visible.where((i) => i.kind == _Kind.point).length;
     final interviews = visible.length - points;
     final surveys = visible.map((i) => i.survey['id']).toSet().length;
+    final surveyors = visible.map((i) => i.survey['user_id']).toSet().length;
 
     return Card(
       elevation: 3,
@@ -634,7 +766,9 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '$points points · $interviews interviews · $surveys surveys',
+              '$surveys surveys · $surveyors surveyor'
+              '${surveyors == 1 ? '' : 's'}\n'
+              '$points points · $interviews interviews',
               style: const TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 12.5,
