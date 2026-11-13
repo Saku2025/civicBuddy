@@ -91,6 +91,31 @@ button.btn-ghost { border: 1.5px solid var(--line); color: var(--ink); }
   gap: 1rem;
 }
 
+.list-head small { color: var(--muted); }
+
+.badge-mine {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0.05rem 0.55rem;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.zip-size { margin: -0.4rem 0 1rem; color: var(--muted); font-weight: 600; min-height: 1.4em; }
+
+.progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.progress-head b { color: var(--primary); font-size: 1.1rem; }
+
 .link-button {
   border: 0;
   background: none;
@@ -148,7 +173,7 @@ button.btn-ghost { border: 1.5px solid var(--line); color: var(--ink); }
 
 .progress { margin-top: 1.2rem; }
 .progress[hidden] { display: none; }
-.progress p { margin: 0 0 0.5rem; color: var(--ink); font-weight: 600; }
+.progress p { margin: 0 0 0.5rem; overflow-wrap: anywhere; color: var(--ink); font-weight: 600; }
 
 .progress-bar {
   height: 8px;

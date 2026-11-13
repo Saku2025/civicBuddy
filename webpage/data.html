@@ -40,9 +40,9 @@
 
   <main>
     <section class="data-page">
-      <p class="eyebrow"><span class="dot"></span> Your survey data</p>
+      <p class="eyebrow"><span class="dot"></span> Survey data</p>
       <h1>Download survey data</h1>
-      <p class="lead">Get your submitted surveys as one ZIP file: every survey, point and citizen interview with all answers, GPS, timestamps and photos, ready for Excel or analysis.</p>
+      <p class="lead">Get submitted surveys from all surveyors as one ZIP file: every survey, point and citizen interview with all answers, GPS, timestamps and photos, ready for Excel or analysis.</p>
 
       <!-- Checking for an existing sign-in -->
       <div class="data-card" id="state-loading">
@@ -53,7 +53,7 @@
       <!-- Signed out -->
       <div class="data-card" id="state-signed-out" hidden>
         <h2>Sign in to continue</h2>
-        <p>Use the same Google account you use in the CivicBuddy app. You can only download your own surveys.</p>
+        <p>Sign in with your Google account (the same one you use in the CivicBuddy app) to see and download all surveys.</p>
         <button class="btn btn-primary btn-google" id="sign-in" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3Z"/><path fill="#fff" opacity=".85" d="M12 22c2.7 0 5-.9 6.6-2.5l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="#fff" opacity=".7" d="M6.4 13.9a6 6 0 0 1 0-3.8V7.5H3.1a10 10 0 0 0 0 9l3.3-2.6Z"/><path fill="#fff" opacity=".85" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.5l3.3 2.6C7.2 7.8 9.4 6 12 6Z"/></svg>
           Sign in with Google
@@ -73,7 +73,10 @@
 
         <div id="survey-area">
           <div class="list-head">
-            <h2 id="survey-count">Your surveys</h2>
+            <div>
+              <h2 id="survey-count">All surveys</h2>
+              <small id="survey-summary"></small>
+            </div>
             <button class="link-button" id="toggle-all" type="button">Select none</button>
           </div>
           <ul class="survey-list" id="survey-list"></ul>
@@ -83,18 +86,23 @@
             <span>Include photos <small id="photo-count"></small></span>
           </label>
 
+          <p class="zip-size" id="zip-size"></p>
+
           <button class="btn btn-primary btn-lg" id="download" type="button">
             <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 19h16"/></svg>
             <span id="download-label">Download ZIP</span>
           </button>
 
           <div class="progress" id="progress" hidden>
-            <p id="progress-text">Preparing…</p>
+            <div class="progress-head">
+              <p id="progress-text">Preparing…</p>
+              <b id="progress-percent">0%</b>
+            </div>
             <div class="progress-bar"><span id="progress-fill"></span></div>
           </div>
         </div>
 
-        <p class="empty" id="no-surveys" hidden>No submitted surveys yet. Surveys appear here after you submit them in the app.</p>
+        <p class="empty" id="no-surveys" hidden>No submitted surveys yet. Surveys appear here after they are submitted in the app.</p>
       </div>
 
       <p class="message" id="message" role="status" hidden></p>
@@ -102,7 +110,7 @@
       <details class="whats-inside">
         <summary>What's inside the ZIP?</summary>
         <ul>
-          <li><b>surveys.csv</b>: one row per survey (ID, start/end time, counts).</li>
+          <li><b>surveys.csv</b>: one row per survey (ID, start/end time, counts, surveyor ID).</li>
           <li><b>points.csv</b>: one row per survey point: GPS, accuracy, area, time, photo files and every surveyor question with its answer.</li>
           <li><b>citizen_interviews.csv</b>: one row per interview: occupation, gender, age, location and every citizen question with its answer.</li>
           <li><b>surveys/&lt;survey ID&gt;/</b>: the full survey as <b>survey.json</b> and its photos in <b>point_1/photo_1.jpg</b> and so on.</li>

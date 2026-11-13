@@ -58,6 +58,7 @@ function showMessage(text, isError = false) {
 function setProgress(text, fraction) {
   $('progress').hidden = false;
   $('progress-text').textContent = text;
+  $('progress-percent').textContent = `${Math.round(Math.min(1, fraction) * 100)}%`;
   $('progress-fill').style.width = `${Math.round(Math.min(1, fraction) * 100)}%`;
 }
 
@@ -111,6 +112,50 @@ function mapsLink(lat, lng) {
     : `https://www.google.com/maps?q=${lat},${lng}`;
 }
 
+function mb(bytes) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ------------------------------------------------------------
+// Photo sizes (read from storage listings, cached per folder)
+// ------------------------------------------------------------
+
+const folderSizes = new Map(); // folder -> Promise<Map<file name, bytes>>
+
+function folderOf(path) {
+  return path.slice(0, path.lastIndexOf('/'));
+}
+
+function listFolder(folder) {
+  if (!folderSizes.has(folder)) {
+    folderSizes.set(
+      folder,
+      client.storage
+        .from(PHOTO_BUCKET)
+        .list(folder, { limit: 1000 })
+        .then(({ data }) => new Map((data || []).map((f) => [f.name, f.metadata?.size || 0])))
+        .catch(() => new Map()),
+    );
+  }
+  return folderSizes.get(folder);
+}
+
+/** Size in bytes of each photo in [surveys]: storage path -> bytes. */
+async function photoSizes(list) {
+  const paths = list.flatMap((s) => pointsOf(s).flatMap((p) => photosOf(p).map((x) => x.storage_path)));
+  const sizes = new Map();
+  await inParallel([...new Set(paths.map(folderOf))], 6, async (folder) => {
+    const files = await listFolder(folder);
+    for (const [name, bytes] of files) sizes.set(`${folder}/${name}`, bytes);
+  });
+  return new Map(paths.map((p) => [p, sizes.get(p) || 0]));
+}
+
+/** Rough size of the CSV/JSON files for [list]. */
+function dataSize(list) {
+  return JSON.stringify(list).length * 3;
+}
+
 // ------------------------------------------------------------
 // CSV (UTF-8 with BOM so Excel shows Bengali correctly)
 // ------------------------------------------------------------
@@ -160,6 +205,12 @@ function renderSurveys() {
     const text = document.createElement('div');
     const title = document.createElement('b');
     title.textContent = survey.survey_id;
+    if (survey.user_id === currentUserId) {
+      const badge = document.createElement('span');
+      badge.className = 'badge-mine';
+      badge.textContent = 'Yours';
+      title.append(' ', badge);
+    }
     const meta = document.createElement('small');
     meta.textContent =
       `Submitted ${dateText(survey.ended_at || survey.created_at)} · ` +
@@ -175,7 +226,10 @@ function renderSurveys() {
   const any = surveys.length > 0;
   $('survey-area').hidden = !any;
   $('no-surveys').hidden = any;
-  $('survey-count').textContent = `Your surveys (${surveys.length})`;
+  const mine = surveys.filter((s) => s.user_id === currentUserId).length;
+  $('survey-count').textContent = `All surveys (${surveys.length})`;
+  $('survey-summary').textContent =
+    `${mine} yours · ${surveys.length - mine} by other surveyors`;
   updateSelection();
 }
 
@@ -186,10 +240,36 @@ function selectedSurveys() {
   return surveys.filter((s) => ids.has(String(s.id)));
 }
 
+let sizeRequest = 0;
+
+/** Shows the estimated ZIP size for the current selection. */
+async function updateSize() {
+  const request = ++sizeRequest;
+  const selected = selectedSurveys();
+  const sizeEl = $('zip-size');
+
+  if (selected.length === 0) {
+    sizeEl.textContent = '';
+    return;
+  }
+
+  let bytes = dataSize(selected);
+  if ($('include-photos').checked && selected.some((s) => photoCount(s) > 0)) {
+    sizeEl.textContent = 'Calculating size…';
+    const sizes = await photoSizes(selected);
+    if (request !== sizeRequest) return; // Selection changed meanwhile.
+    for (const size of sizes.values()) bytes += size;
+  }
+  sizeEl.textContent = `Estimated ZIP size: ${mb(bytes)}`;
+}
+
+$('include-photos').addEventListener('change', updateSize);
+
 function updateSelection() {
   const selected = selectedSurveys();
   const photos = selected.reduce((sum, s) => sum + photoCount(s), 0);
   $('photo-count').textContent = `(${plural(photos, 'photo')})`;
+  updateSize();
   $('download-label').textContent =
     selected.length === 0
       ? 'Select surveys to download'
@@ -207,11 +287,14 @@ $('toggle-all').addEventListener('click', () => {
   updateSelection();
 });
 
+let currentUserId = null;
+
+/** Every surveyor's surveys (as Supabase's rules allow), newest first. */
 async function loadSurveys(user) {
+  currentUserId = user.id;
   const { data, error } = await client
     .from('surveys')
-    .select('id, survey_id, status, started_at, ended_at, created_at, survey_data')
-    .eq('user_id', user.id)
+    .select('id, user_id, survey_id, status, started_at, ended_at, created_at, survey_data')
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -240,11 +323,21 @@ async function buildZip(selected, includePhotos, userEmail) {
   const stamp = new Date().toISOString().slice(0, 10);
   const top = zip.folder(`CivicBuddy_surveys_${stamp}`);
 
+  // One folder per survey; IDs from different surveyors could repeat.
+  const folders = new Map();
+  const used = new Set();
+  for (const survey of selected) {
+    let name = safeName(survey.survey_id);
+    if (used.has(name)) name = `${name}_${survey.id}`;
+    used.add(name);
+    folders.set(survey, `surveys/${name}`);
+  }
+
   // Photos to fetch: storage path -> path inside the ZIP.
   const photoJobs = [];
   const photoFiles = new Map();
   for (const survey of selected) {
-    const folder = `surveys/${safeName(survey.survey_id)}`;
+    const folder = folders.get(survey);
     for (const point of pointsOf(survey)) {
       photosOf(point).forEach((photo, i) => {
         const name = `${folder}/point_${point.point_number}/photo_${photo.photo_number ?? i + 1}.jpg`;
@@ -254,23 +347,36 @@ async function buildZip(selected, includePhotos, userEmail) {
     }
   }
 
-  // 1. Photos.
+  // 1. Photos, with progress in MB and percent of the total size.
   const missing = [];
   if (includePhotos && photoJobs.length > 0) {
+    setProgress('Calculating download size…', 0);
+    const sizes = await photoSizes(selected);
+    const totalBytes = [...sizes.values()].reduce((a, b) => a + b, 0);
+    let doneBytes = 0;
     let done = 0;
-    setProgress(`Downloading photos: 0 of ${photoJobs.length}`, 0);
+
+    const report = () => {
+      const fraction = totalBytes > 0 ? doneBytes / totalBytes : done / photoJobs.length;
+      setProgress(
+        `Downloading ${mb(doneBytes)} of ${mb(totalBytes)} (${Math.round(fraction * 100)}%) · ` +
+          `${done} of ${plural(photoJobs.length, 'photo')}`,
+        fraction * 0.9,
+      );
+    };
+    report();
+
     await inParallel(photoJobs, 4, async (job) => {
       const { data, error } = await client.storage.from(PHOTO_BUCKET).download(job.path);
       if (error || !data) {
         missing.push(job.name);
+        doneBytes += sizes.get(job.path) || 0;
       } else {
         top.file(job.name, data, { binary: true, compression: 'STORE' });
+        doneBytes += data.size;
       }
       done++;
-      setProgress(
-        `Downloading photos: ${done} of ${photoJobs.length}`,
-        (done / photoJobs.length) * 0.9,
-      );
+      report();
     });
   }
 
@@ -281,13 +387,15 @@ async function buildZip(selected, includePhotos, userEmail) {
     'surveys.csv',
     toCsv(
       ['survey_id', 'status', 'started_at', 'ended_at', 'submitted_at',
-        'duration_minutes', 'points', 'photos', 'citizen_interviews', 'surveyor_email'],
+        'duration_minutes', 'points', 'photos', 'citizen_interviews', 'surveyor_id',
+        'downloaded_by_me'],
       selected.map((s) => {
         const start = new Date(s.started_at);
         const end = new Date(s.ended_at);
         const minutes = Number.isNaN(end - start) ? '' : Math.round((end - start) / 60000);
         return [s.survey_id, s.status, s.started_at, s.ended_at, s.created_at, minutes,
-          pointsOf(s).length, photoCount(s), citizensOf(s).length, userEmail];
+          pointsOf(s).length, photoCount(s), citizensOf(s).length, s.user_id,
+          s.user_id === currentUserId ? 'yes' : 'no'];
       }),
     ),
   );
@@ -340,7 +448,7 @@ async function buildZip(selected, includePhotos, userEmail) {
   // 5. Full JSON, per survey and all together.
   for (const survey of selected) {
     top.file(
-      `surveys/${safeName(survey.survey_id)}/survey.json`,
+      `${folders.get(survey)}/survey.json`,
       JSON.stringify(survey, null, 2),
     );
   }
@@ -371,7 +479,10 @@ async function buildZip(selected, includePhotos, userEmail) {
   setProgress('Creating ZIP file…', 0.95);
   const blob = await zip.generateAsync(
     { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
-    (meta) => setProgress('Creating ZIP file…', 0.95 + (meta.percent / 100) * 0.05),
+    (meta) => setProgress(
+      `Creating ZIP file… ${Math.round(meta.percent)}%`,
+      0.95 + (meta.percent / 100) * 0.05,
+    ),
   );
 
   return { blob, name: `CivicBuddy_surveys_${stamp}.zip`, missing };
