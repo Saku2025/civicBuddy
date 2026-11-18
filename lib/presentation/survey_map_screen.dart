@@ -214,7 +214,8 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
     final answers = point['surveyor_answers'];
     if (answers is! Map) return null;
     for (final entry in answers.entries) {
-      if ('${entry.key}'.startsWith('Visual Cleanliness')) {
+      // Older app versions saved the question with a leading space.
+      if ('${entry.key}'.trim().startsWith('Visual Cleanliness')) {
         return entry.value?.toString();
       }
     }

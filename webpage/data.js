@@ -171,15 +171,42 @@ function toCsv(headers, rows) {
   return '﻿' + lines.join('\r\n') + '\r\n';
 }
 
-/** Question texts in first-seen order across all [answerMaps]. */
+/**
+ * The short label a question starts with ("Visual Cleanliness",
+ * "CCTV Intervention"). Older app versions worded questions slightly
+ * differently (extra spaces, no Bengali text, ` instead of '), so answers
+ * are matched by this label.
+ */
+function topicOf(question) {
+  const text = String(question).replace(/[`\u2019]/g, "'").trim();
+  const colon = text.indexOf(':');
+  return (colon > 0 ? text.slice(0, colon) : text).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * One column per question label, in first-seen order across [answerMaps]
+ * (newest survey first, so headers use the current wording).
+ */
 function questionColumns(answerMaps) {
-  const seen = new Set();
+  const columns = new Map(); // topic -> header text
   for (const answers of answerMaps) {
     if (answers && typeof answers === 'object') {
-      Object.keys(answers).forEach((q) => seen.add(q));
+      for (const question of Object.keys(answers)) {
+        const topic = topicOf(question);
+        if (!columns.has(topic)) columns.set(topic, question.trim());
+      }
     }
   }
-  return [...seen];
+  return [...columns].map(([topic, header]) => ({ topic, header }));
+}
+
+/** The answer to the question with this label, whatever its wording. */
+function answerFor(answers, topic) {
+  if (!answers || typeof answers !== 'object') return '';
+  for (const [question, answer] of Object.entries(answers)) {
+    if (topicOf(question) === topic) return answer ?? '';
+  }
+  return '';
 }
 
 // ------------------------------------------------------------
@@ -408,7 +435,7 @@ async function buildZip(selected, includePhotos, userEmail) {
     toCsv(
       ['survey_id', 'point_number', 'latitude', 'longitude', 'gps_accuracy_m', 'area',
         'captured_at', 'google_maps', 'photo_count', 'photo_files',
-        ...pointQuestions.map((q, i) => `Q${i + 1}: ${q}`)],
+        ...pointQuestions.map((q, i) => `Q${i + 1}: ${q.header}`)],
       allPoints.map(({ survey, point }) => {
         const photos = photosOf(point);
         return [
@@ -417,7 +444,7 @@ async function buildZip(selected, includePhotos, userEmail) {
           point.area || UNKNOWN_AREA, point.captured_at,
           mapsLink(point.latitude, point.longitude), photos.length,
           photos.map((p) => photoFiles.get(p.storage_path)).join(' | '),
-          ...pointQuestions.map((q) => point.surveyor_answers?.[q] ?? ''),
+          ...pointQuestions.map((q) => answerFor(point.surveyor_answers, q.topic)),
         ];
       }),
     ),
@@ -433,14 +460,14 @@ async function buildZip(selected, includePhotos, userEmail) {
     toCsv(
       ['survey_id', 'interview_number', 'occupation', 'gender', 'age', 'latitude',
         'longitude', 'gps_accuracy_m', 'area', 'location_captured_at', 'google_maps',
-        ...citizenQuestions.map((q, i) => `Q${i + 1}: ${q}`)],
+        ...citizenQuestions.map((q, i) => `Q${i + 1}: ${q.header}`)],
       allCitizens.map(({ survey, citizen, number }) => [
         survey.survey_id, number, citizen.occupation, citizen.gender, citizen.age,
         citizen.latitude, citizen.longitude,
         citizen.accuracy_m == null ? '' : Math.round(citizen.accuracy_m),
         citizen.area || '', citizen.location_captured_at,
         mapsLink(citizen.latitude, citizen.longitude),
-        ...citizenQuestions.map((q) => citizen.answers?.[q] ?? ''),
+        ...citizenQuestions.map((q) => answerFor(citizen.answers, q.topic)),
       ]),
     ),
   );
