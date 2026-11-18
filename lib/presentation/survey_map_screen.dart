@@ -84,10 +84,11 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
   static const Color _unrated = Color(0xFF8A9A90);
   static const Color _interviewColor = Color(0xFF2F6FDB);
 
-  // "Color by surveyor": you are green, others get these in order.
-  static const Color _myColor = Color(0xFF2E9E50);
+  // "Color by surveyor": Surveyor 1 is blue, Surveyor 2 green, and so on.
+  // Fixed per account, so everyone sees the same colour for a surveyor.
   static const List<Color> _surveyorPalette = [
     Color(0xFF2F6FDB), // blue
+    Color(0xFF2E9E50), // green
     Color(0xFF8E44AD), // purple
     Color(0xFFE67E22), // orange
     Color(0xFFC2185B), // pink
@@ -133,10 +134,6 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
 
   // Only this surveyor's surveys (user id), or null for everyone.
   String? _userFilter;
-
-  // "You", "Surveyor 1", "Surveyor 2"… by user id (other surveyors' names
-  // and emails are not visible to the app).
-  Map<String, String> _surveyorNames = {};
 
   _ColorBy _colorBy = _ColorBy.surveyor;
 
@@ -187,7 +184,7 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
       setState(() {
         _surveys = surveys;
         _items = _buildItems(surveys);
-        _surveyorNames = _nameSurveyors(surveys);
+        _surveyorNumbers = _numberSurveyors(surveys);
         _loading = false;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _fitToVisible());
@@ -295,32 +292,42 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
     return items;
   }
 
-  /// "You" for the signed-in user; other accounts numbered by how many
-  /// surveys they submitted (most first).
-  Map<String, String> _nameSurveyors(List<Map<String, dynamic>> surveys) {
-    final counts = <String, int>{};
+  // Surveyor number (1, 2, 3…) per user id: fixed, and the same on every
+  // phone, because it follows the order of each account's first survey.
+  Map<String, int> _surveyorNumbers = {};
+
+  Map<String, int> _numberSurveyors(List<Map<String, dynamic>> surveys) {
+    final first = <String, String>{};
     for (final survey in surveys) {
       final id = survey['user_id']?.toString() ?? '';
-      counts[id] = (counts[id] ?? 0) + 1;
+      final created = survey['created_at']?.toString() ?? '';
+      if (!first.containsKey(id) || created.compareTo(first[id]!) < 0) {
+        first[id] = created;
+      }
     }
-    final others = counts.keys.where((id) => id != _myUserId).toList()
-      ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
-    return {
-      if (_myUserId != null && counts.containsKey(_myUserId)) _myUserId: 'You',
-      for (final (i, id) in others.indexed) id: 'Surveyor ${i + 1}',
-    };
+    final ids = first.keys.toList()
+      ..sort((a, b) {
+        final byDate = first[a]!.compareTo(first[b]!);
+        return byDate != 0 ? byDate : a.compareTo(b);
+      });
+    return {for (final (i, id) in ids.indexed) id: i + 1};
   }
 
-  /// Green for you; "Surveyor N" gets the N-th palette colour.
+  int _surveyorNumber(Object? userId) =>
+      _surveyorNumbers[userId?.toString()] ?? 0;
+
+  /// Surveyor N always gets the N-th palette colour.
   Color _surveyorColor(Object? userId) {
-    if (userId != null && userId == _myUserId) return _myColor;
-    final name = _surveyorNames[userId?.toString()] ?? '';
-    final n = int.tryParse(name.replaceFirst('Surveyor ', '')) ?? 1;
-    return _surveyorPalette[(n - 1) % _surveyorPalette.length];
+    final n = _surveyorNumber(userId);
+    return _surveyorPalette[(math.max(n, 1) - 1) % _surveyorPalette.length];
   }
 
-  String _surveyorName(Object? userId) =>
-      _surveyorNames[userId?.toString()] ?? 'Surveyor';
+  /// "Surveyor 2", or "Surveyor 2 (You)" for the signed-in account.
+  String _surveyorName(Object? userId) {
+    final n = _surveyorNumber(userId);
+    final name = n == 0 ? 'Surveyor' : 'Surveyor $n';
+    return userId != null && userId == _myUserId ? '$name (You)' : name;
+  }
 
   /// Surveys, points and interviews per surveyor, for the date filter.
   List<({String userId, int surveys, int points, int interviews})>
@@ -348,12 +355,10 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
           interviews: entry.value.interviews,
         ),
     ];
-    // You first, then the others by number of surveys.
-    list.sort((a, b) {
-      if (a.userId == _myUserId) return -1;
-      if (b.userId == _myUserId) return 1;
-      return b.surveys.compareTo(a.surveys);
-    });
+    // Surveyor 1, 2, 3…
+    list.sort(
+      (a, b) => _surveyorNumber(a.userId).compareTo(_surveyorNumber(b.userId)),
+    );
     return list;
   }
 
@@ -777,7 +782,7 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
               label: Text(
                 _userFilter != null && _userFilter != _myUserId
                     ? _surveyorName(_userFilter)
-                    : 'Surveyors (${_surveyorNames.length})',
+                    : 'Surveyors (${_surveyorNumbers.length})',
               ),
               onPressed: _pickSurveyor,
               visualDensity: VisualDensity.compact,
@@ -845,11 +850,8 @@ class _SurveyMapScreenState extends State<SurveyMapScreen>
               for (final userId
                   in visible.map((i) => i.survey['user_id']).toSet().toList()
                     ..sort(
-                      (a, b) => _surveyorName(a) == 'You'
-                          ? -1
-                          : _surveyorName(b) == 'You'
-                          ? 1
-                          : _surveyorName(a).compareTo(_surveyorName(b)),
+                      (a, b) =>
+                          _surveyorNumber(a).compareTo(_surveyorNumber(b)),
                     ))
                 row(_surveyorColor(userId), _surveyorName(userId)),
               if (_showInterviews)

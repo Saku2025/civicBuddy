@@ -104,12 +104,21 @@ class SurveyService {
     return List<Map<String, dynamic>>.from(rows);
   }
 
-  /// Every surveyor's surveys (for the map), newest first. Supabase's rules
-  /// return all surveys to surveyors who have submitted at least one, and
-  /// only their own to anyone else.
+  /// Every surveyor's surveys for the map, newest first, for any signed-in
+  /// user (also ones who have not submitted a survey yet).
+  ///
+  /// Uses the database function `map_surveys`; until it exists, falls back
+  /// to the surveys table, which Supabase only fully opens to surveyors.
   static Future<List<Map<String, dynamic>>> getAllSurveys() async {
     if (_client.auth.currentUser == null) {
       throw Exception('You must be signed in to view surveys.');
+    }
+    try {
+      final rows = await _client.rpc('map_surveys');
+      return List<Map<String, dynamic>>.from(rows as List);
+    } on PostgrestException catch (e) {
+      // Function not created yet: PGRST202 (not found) / 42883.
+      if (e.code != 'PGRST202' && e.code != '42883') rethrow;
     }
     final rows = await _client
         .from('surveys')
