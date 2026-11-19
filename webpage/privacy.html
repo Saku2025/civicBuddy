@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy · CivicBuddy</title>
+  <meta name="description" content="What data the CivicBuddy app and its backup collect, where it is stored, who can see it and how to contact us.">
+  <meta name="theme-color" content="#256D3F">
+  <link rel="icon" href="app-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .policy { max-width: 760px; margin: 0 auto; padding: clamp(2.5rem, 7vw, 5rem) 0 4rem; }
+    .policy h1 { margin: 0.4rem 0 0.4rem; font-size: clamp(2rem, 5vw, 2.6rem); line-height: 1.15; }
+    .policy .updated { color: var(--muted); margin: 0 0 2rem; }
+    .policy h2 { margin: 2.2rem 0 0.6rem; font-size: 1.25rem; }
+    .policy p, .policy li { color: var(--ink); }
+    .policy ul { padding-left: 1.3rem; }
+    .policy li { margin-bottom: 0.35rem; }
+    .policy a { color: var(--primary); font-weight: 600; }
+    .policy table { width: 100%; border-collapse: collapse; margin: 0.6rem 0 1rem; font-size: 0.95rem; }
+    .policy th, .policy td { text-align: left; vertical-align: top; padding: 0.6rem 0.7rem;
+      border-bottom: 1px solid var(--line); }
+    .policy th { color: var(--muted); font-weight: 700; font-size: 0.85rem; }
+    .policy .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 1rem 1.25rem; }
+    .eyebrow { color: var(--primary); font-weight: 700; font-size: 0.85rem; margin: 0; }
+    @media (max-width: 640px) { .policy table { font-size: 0.88rem; } .policy th, .policy td { padding: 0.5rem 0.4rem; } }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="index.html">
+      <img src="app-icon.png" alt="" width="36" height="36">
+      <span>CivicBuddy</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="index.html#download" class="nav-cta">Get the app</a>
+    </nav>
+  </header>
+
+  <main>
+    <article class="policy">
+      <p class="eyebrow">Privacy</p>
+      <h1>Privacy Policy</h1>
+      <p class="updated">Last updated: 19 November 2026</p>
+
+      <p>CivicBuddy is a field-survey app for mapping garbage hotspots. Surveyors record
+        survey points (GPS location, photos and a short questionnaire) and short citizen
+        interviews. This page explains what data the CivicBuddy app, this website and the
+        CivicBuddy Backup tool collect, where it is stored, who can see it and how to
+        contact us.</p>
+
+      <h2>1. Data we collect</h2>
+      <table>
+        <tr><th>Data</th><th>Why</th></tr>
+        <tr><td><b>Google account:</b> name, email address, profile picture</td>
+          <td>To sign in surveyors and show who submitted a survey</td></tr>
+        <tr><td><b>Survey points:</b> GPS location and accuracy, area name, date and time,
+          photos, surveyor's answers (cleanliness, waste type, odour, etc.)</td>
+          <td>The survey itself: where garbage is and what it looks like</td></tr>
+        <tr><td><b>Citizen interviews:</b> occupation, gender, age, interview location and
+          answers</td>
+          <td>Citizens' views on local cleanliness. <b>Citizens are not asked for their
+          name.</b></td></tr>
+        <tr><td><b>Notifications:</b> a Firebase Cloud Messaging token</td>
+          <td>To tell the phone when a new app version is available</td></tr>
+      </table>
+      <p>The app does <b>not</b> use advertising, analytics or tracking, and does not
+        collect contacts, call logs or files other than the photos taken in the app.</p>
+
+      <h2>2. Where it is stored</h2>
+      <ul>
+        <li><b>Supabase</b> (database and file storage): submitted surveys and photos.</li>
+        <li><b>On the phone:</b> unfinished surveys (drafts) and surveys waiting to upload,
+          until they are submitted or deleted.</li>
+        <li><b>Google Drive backup:</b> copies of the survey database and photos, kept in
+          the project maintainer's own Google Drive by the CivicBuddy Backup tool (see
+          section 5).</li>
+      </ul>
+
+      <h2>3. Who can see the data</h2>
+      <ul>
+        <li><b>Signed-in app users</b> can see submitted surveys on the in-app Survey Map
+          (points, details and photos).</li>
+        <li><b>Surveyors</b> (accounts that have submitted at least one survey) can download
+          survey data from this website's Download data page.</li>
+        <li>Other surveyors are shown as "Surveyor 1", "Surveyor 2"… and other surveyors'
+          email addresses are not shown in the app.</li>
+        <li>We do <b>not</b> sell or rent data, and do not share it for advertising.</li>
+      </ul>
+
+      <h2>4. Services we use</h2>
+      <ul>
+        <li><b>Supabase</b>: database, file storage and sign-in.</li>
+        <li><b>Google Sign-In</b>: signing in with a Google account.</li>
+        <li><b>Firebase Cloud Messaging</b>: update notifications.</li>
+        <li><b>OpenStreetMap</b>: map images in the Survey Map (the map server sees the
+          phone's IP address when loading map images).</li>
+        <li><b>GitHub</b>: app downloads and updates; <b>Render</b>: hosting of this website.</li>
+        <li><b>Google Drive</b>: backups (section 5).</li>
+      </ul>
+
+      <h2>5. CivicBuddy Backup and Google Drive</h2>
+      <div class="card">
+        <p>CivicBuddy Backup is a tool used only by the project maintainer. It copies the
+          CivicBuddy survey database and photos into a folder in the maintainer's own Google
+          Drive, to protect the data and keep Supabase within its storage limit.</p>
+        <ul>
+          <li>It uses the Google Drive permission <b><code>drive.file</code></b>, which only
+            allows access to files the tool created itself. It cannot see, read or change any
+            other file in that Google Drive.</li>
+          <li>Data from Google Drive is used only to store and restore CivicBuddy backups. It
+            is not shared, sold or used for advertising or AI training.</li>
+          <li>CivicBuddy Backup's use and transfer of information received from Google APIs
+            adheres to the
+            <a href="https://developers.google.com/terms/api-services-user-data-policy">Google
+            API Services User Data Policy</a>, including the Limited Use requirements.</li>
+        </ul>
+      </div>
+
+      <h2>6. How long we keep data</h2>
+      <p>Survey data is kept for as long as it is needed for the survey project. Surveyors
+        can delete their own submitted surveys in the app (Previous Survey). Backups in
+        Google Drive are kept so that data can be restored; when a survey must be removed
+        completely, contact us and it will also be removed from the backups.</p>
+
+      <h2>7. Children</h2>
+      <p>CivicBuddy is intended for adult surveyors and is not directed at children under
+        13.</p>
+
+      <h2>8. Your choices and contact</h2>
+      <p>To ask what data is held about you, to correct it or to have it deleted, or for any
+        other privacy question, please open an issue on the CivicBuddy GitHub page:
+        <a href="https://github.com/Saku2025/civicBuddy/issues">github.com/Saku2025/civicBuddy/issues</a>.
+        Please do not include personal details in a public issue; we will reply there and
+        arrange a private way to continue if needed.</p>
+
+      <h2>9. Changes</h2>
+      <p>If this policy changes, the new version is published on this page with a new
+        "Last updated" date.</p>
+    </article>
+  </main>
+
+  <footer class="footer">
+    <div class="brand">
+      <img src="app-icon.png" alt="" width="28" height="28">
+      <span>CivicBuddy</span>
+    </div>
+    <p class="copyright">© <span data-year>2026</span> CivicBuddy. All rights reserved.</p>
+    <span class="footer-links"><a href="privacy.html">Privacy</a> · <a href="https://github.com/Saku2025/civicBuddy/releases">All releases</a></span>
+  </footer>
+  <script>document.querySelectorAll('[data-year]').forEach((el) => { el.textContent = new Date().getFullYear(); });</script>
+</body>
+</html>
